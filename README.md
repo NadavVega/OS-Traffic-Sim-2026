@@ -40,3 +40,5 @@ The project is divided into seven key milestones to be completed throughout the 
 5. **Run**: `./OS_Project <input_file>`
 
 ---
+
+* [Click here to watch the workflow](https://github.com/NadavVega/OS-Traffic-Sim-2026/wiki/Team-Git-&-GitHub-Workflow-Guide) 
