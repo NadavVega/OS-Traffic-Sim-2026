@@ -41,4 +41,5 @@ The project is divided into seven key milestones to be completed throughout the 
 
 ---
 
-* [Click here to watch the workflow](https://github.com/NadavVega/OS-Traffic-Sim-2026/wiki/Team-Git-&-GitHub-Workflow-Guide) 
+* [Click here to watch the workflow](https://github.com/NadavVega/OS-Traffic-Sim-2026/wiki/Team-Git-&-GitHub-Workflow-Guide)
+* [Click here to watch the CMake instructions](https://github.com/NadavVega/OS-Traffic-Sim-2026/wiki/CMake-&-Build-System-Guide)
