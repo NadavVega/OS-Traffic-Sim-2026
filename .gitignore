@@ -19,3 +19,7 @@ traffic_sim     # Or whatever we name our final executable
 # === Raylib / Libraries ===
 # If we download raylib source into the project instead of installing globally
 /_deps/
+
+# Debugging / Core Dumps
+vgcore.*
+*.log
