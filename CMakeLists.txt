@@ -9,8 +9,6 @@ include_directories(include)
 
 set(SOURCES 
     src/main.c 
-    src/parser.c 
-    src/graph_core.c
 )
 
 add_executable(OS_Project ${SOURCES})
