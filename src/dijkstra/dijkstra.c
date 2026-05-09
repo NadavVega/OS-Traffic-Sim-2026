@@ -1,7 +1,5 @@
 #include "dijkstra.h"
 #include <limits.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 // Function to find the vertex with the minimum distance
 int find_min_distance(int num_nodes, int dist[], int visited[]) {
@@ -17,12 +15,13 @@ int find_min_distance(int num_nodes, int dist[], int visited[]) {
   return min_index;
 }
 
-dijkstraResult find_shortest_path(int num_nodes, int graph[15][15], int start,
+dijkstraResult find_shortest_path(int num_nodes,
+                                  int graph[MAX_NODES][MAX_NODES], int start,
                                   int end) {
   dijkstraResult result;
-  int dist[15];
-  int visited[15];
-  int prev[15];
+  int dist[MAX_NODES];
+  int visited[MAX_NODES];
+  int prev[MAX_NODES];
 
   // Initialize distances and visited array
   for (int i = 0; i < num_nodes; i++) {
@@ -42,7 +41,7 @@ dijkstraResult find_shortest_path(int num_nodes, int graph[15][15], int start,
 
     // Update distances of adjacent vertices
     for (int v = 0; v < num_nodes; v++) {
-      if (!visited[v] && graph[u][v] && dist[u] != INT_MAX &&
+      if (!visited[v] && graph[u][v] != -1 && dist[u] != INT_MAX &&
           dist[u] + graph[u][v] < dist[v]) {
         dist[v] = dist[u] + graph[u][v];
         prev[v] = u;
@@ -60,7 +59,7 @@ dijkstraResult find_shortest_path(int num_nodes, int graph[15][15], int start,
     return result;
   }
 
-  int temp_path[15];
+  int temp_path[MAX_NODES];
   int index = 0;
   int curr = end;
 
