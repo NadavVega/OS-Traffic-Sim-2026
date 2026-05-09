@@ -6,6 +6,9 @@
 
 #include <stdbool.h>
 
+#include "raylib.h"
+
+
 #define MAX_NODES 15 // מגבלת קודקודים
 
 // מבנה עזר לשמירת קואורדינטות של צומת על המסך

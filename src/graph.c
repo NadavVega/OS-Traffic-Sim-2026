@@ -1,14 +1,12 @@
 //
 // Created by balah on 09/05/2026.
 //
+//
+// Created by balah on 09/05/2026.
+//
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
-// הגדרה ידנית של פאי למקרה שהמערכת לא חשפה אותו
-#ifndef M_PI
-    #define M_PI 3.14159265358979323846
-#endif
 
 #include "graph.h"
 
@@ -34,7 +32,7 @@ Graph* create_graph(int nodes, int edges) {
 }
 
 void add_edge(Graph* g, int src, int dest, int weight) {
-    // בדיקת תקינות קלט ומשקלים שליליים [cite: 72, 73]
+    // בדיקת תקינות קלט ומשקלים שליליים
     if (g == NULL || src < 0 || src >= g->num_nodes ||
         dest < 0 || dest >= g->num_nodes || weight < 0) {
         return;
@@ -59,7 +57,8 @@ void calculate_node_positions(Graph* g, int screen_width, int screen_height) {
 
     // פיזור הצמתים במעגל למניעת חפיפה ושיפור הקריאות
     for (int i = 0; i < g->num_nodes; i++) {
-        float angle = (2.0f * (float)M_PI * i) / (float)g->num_nodes;
+        // שימוש בקבוע PI מתוך raylib.h
+        float angle = (2.0f * PI * i) / (float)g->num_nodes;
         g->node_positions[i].x = center_x + (int)(radius * cos(angle));
         g->node_positions[i].y = center_y + (int)(radius * sin(angle));
     }
