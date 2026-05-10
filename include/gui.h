@@ -1,40 +1,39 @@
-
-// Created by נוה תורן on 09/05/2026.
+// Created by Nave Toren on 09/05/2026.
 
 #ifndef GUI_H
 #define GUI_H
 
 #include "raylib.h"
 
-// מבנה לייצוג ויזואלי של צומת על המסך
+// Structure representing the visual representation of a node on the screen
 typedef struct {
-    Vector2 pos; // מיקום X ו-Y בפיקסלים
-    int id;      // מספר הצומת (0 עד 14) [cite: 80]
+    Vector2 pos; // X and Y position in pixels
+    int id;      // Node ID (0 to 14)
 } VisualNode;
 
-// פונקציה לחישוב מיקומי הצמתים במעגל כדי להבטיח קריאות [cite: 80]
+// Function to calculate node positions in a circle to ensure readability
 void InitGraphVisuals(int num_nodes, VisualNode nodes[]);
 
-// פונקציה לציור הגרף הסטטי (צמתים, קשתות, חצים ומשקלים) [cite: 76, 79]
+// Function to draw the static graph (nodes, edges, arrows, and weights)
 void DrawStaticGraph(int num_nodes, VisualNode nodes[], int graph[15][15]);
 
+// Function to handle interactive button rendering and click detection
 bool DrawButton(Rectangle bounds, const char* text, bool active);
 
-// מבנה לניהול מצב הישות הזזה
+// Structure for managing the state of the moving entity
 typedef struct {
-    Vector2 currentPos;   // מיקום נוכחי בפיקסלים
-    int startNode;        // צומת מוצא של הקשת הנוכחית
-    int endNode;          // צומת יעד של הקשת הנוכחית
-    int currentJump;      // באיזו קפיצה אנחנו מתוך W
-    float timer;          // טיימר פנימי למדידת זמן הקפיצה
-    bool isWaiting;       // האם הישות בהמתנה של שנייה בצומת
+    Vector2 currentPos;   // Current position in pixels
+    int startNode;        // Starting node of the current edge
+    int endNode;          // Target node of the current edge
+    int currentJump;      // Current jump index out of the total weight (W)
+    float timer;          // Internal timer to measure jump duration
+    bool isWaiting;       // Indicates if the entity is currently waiting at a node
 } Entity;
 
-// פונקציה לעדכון תנועת הישות
+// Function to update the entity's movement logic
 void UpdateEntity(Entity* entity, int num_nodes, VisualNode nodes[], int graph[15][15], int path[], int pathSize);
 
-// פונקציה לציור הישות
+// Function to render the entity on the screen
 void DrawEntity(Entity entity);
-
 
 #endif // GUI_H

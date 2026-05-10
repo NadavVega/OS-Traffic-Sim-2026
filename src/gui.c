@@ -2,7 +2,7 @@
 #include "raymath.h"
 #include <math.h>
 
-// סידור הצמתים במעגל למניעת חפיפה (שלב 2)
+// Arrange nodes in a circle to prevent overlap (Stage 2)
 void InitGraphVisuals(int num_nodes, VisualNode nodes[]) {
     float centerX = 400.0f;
     float centerY = 300.0f;
@@ -15,28 +15,28 @@ void InitGraphVisuals(int num_nodes, VisualNode nodes[]) {
     }
 }
 
-// ציור הגרף הסטטי: קשתות, חצים ומשקלים (שלב 2)
+// Drawing the static graph: edges, arrows, and weights (Stage 2)
 void DrawStaticGraph(int num_nodes, VisualNode nodes[], int graph[15][15]) {
     for (int i = 0; i < num_nodes; i++) {
         for (int j = 0; j < num_nodes; j++) {
             if (graph[i][j] > 0) {
-                // 1. ציור קשת
+                // 1. Draw edge
                 DrawLineEx(nodes[i].pos, nodes[j].pos, 2.0f, DARKGRAY);
 
-                // 2. חישוב וציור ראש חץ בנקודת המפגש עם הצומת
+                // 2. Calculate and draw arrowhead at the intersection with the node
                 Vector2 direction = Vector2Subtract(nodes[j].pos, nodes[i].pos);
                 float angle = atan2f(direction.y, direction.x);
                 Vector2 arrowPoint = Vector2Subtract(nodes[j].pos, Vector2Scale(Vector2Normalize(direction), 35));
                 DrawPoly(arrowPoint, 3, 12, angle * RAD2DEG, DARKGRAY);
 
-                // 3. ציור משקל הקשת במרכז
+                // 3. Draw edge weight at the center
                 Vector2 mid = { (nodes[i].pos.x + nodes[j].pos.x) / 2, (nodes[i].pos.y + nodes[j].pos.y) / 2 };
                 DrawText(TextFormat("%d", graph[i][j]), mid.x + 10, mid.y + 10, 20, RED);
             }
         }
     }
 
-    // ציור צמתים (עיגול + מספר)
+    // Draw nodes (circle + ID)
     for (int i = 0; i < num_nodes; i++) {
         DrawCircleV(nodes[i].pos, 25, MAROON);
         DrawCircleLines(nodes[i].pos.x, nodes[i].pos.y, 25, BLACK);
@@ -44,7 +44,7 @@ void DrawStaticGraph(int num_nodes, VisualNode nodes[], int graph[15][15]) {
     }
 }
 
-// מימוש כפתור Play/Stop אינטראקטיבי (שלב 3)
+// Interactive Play/Stop button implementation (Stage 3)
 bool DrawButton(Rectangle bounds, const char* text, bool active) {
     Vector2 mousePoint = GetMousePosition();
     bool clicked = false;
@@ -62,10 +62,10 @@ bool DrawButton(Rectangle bounds, const char* text, bool active) {
     return clicked;
 }
 
-// לוגיקת תנועה ותזמון (שלב 3)
+// Movement and timing logic (Stage 3)
 void UpdateEntity(Entity* entity, int num_nodes, VisualNode nodes[], int graph[15][15], int path[], int pathSize) {
 
-    // מצב המתנה: עוצרים לשנייה אחת בכל צומת (דרישת פרויקט)
+    // Waiting state: Pause for one second at each node (Project requirement)
     if (entity->isWaiting) {
         entity->timer += GetFrameTime();
         if (entity->timer >= 1.0f) {
@@ -75,29 +75,29 @@ void UpdateEntity(Entity* entity, int num_nodes, VisualNode nodes[], int graph[1
         return;
     }
 
-    // זיהוי צמתי הקשת הנוכחית במסלול
+    // Identify current edge nodes in the path
     int u = path[entity->startNode];
     int v = path[entity->endNode];
-    int w = graph[u][v]; // משקל הקשת הקובע את מספר הקפיצות
+    int w = graph[u][v]; // Edge weight determines the number of jumps
 
     entity->timer += GetFrameTime();
 
-    // כל קפיצה לוקחת בדיוק 300 מילישניות (דרישת פרויקט)
+    // Each jump takes exactly 300 milliseconds (Project requirement)
     if (entity->timer >= 0.3f) {
         entity->timer = 0;
         entity->currentJump++;
 
         if (entity->currentJump <= w) {
-            // חישוב התקדמות ליניארית (Interpolation) בין הצמתים
+            // Calculate linear progression (Interpolation) between nodes
             float t = (float)entity->currentJump / w;
             entity->currentPos = Vector2Lerp(nodes[u].pos, nodes[v].pos, t);
         } else {
-            // סיום מעבר קשת: מעבר לצמתים הבאים במסלול
+            // End of edge traversal: Move to next nodes in path
             entity->currentJump = 0;
             entity->startNode++;
             entity->endNode++;
 
-            // אם הגענו לצומת שאינו היעד הסופי - נכנסים למצב המתנה
+            // Enter waiting state if destination node hasn't been reached
             if (entity->endNode < pathSize) {
                 entity->isWaiting = true;
             }
@@ -105,8 +105,8 @@ void UpdateEntity(Entity* entity, int num_nodes, VisualNode nodes[], int graph[1
     }
 }
 
-// ציור הישות הזזה (שלב 3)
+// Draw the moving entity (Stage 3)
 void DrawEntity(Entity entity) {
-    DrawCircleV(entity.currentPos, 12, GOLD); // עיגול מוזהב מייצג את הרכב/נוסע
+    DrawCircleV(entity.currentPos, 12, GOLD); // Golden circle representing the vehicle/passenger
     DrawCircleLines(entity.currentPos.x, entity.currentPos.y, 12, BLACK);
 }
