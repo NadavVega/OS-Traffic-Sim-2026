@@ -1,0 +1,98 @@
+//
+// Created by balah on 09/05/2026.
+//
+//
+// Created by balah on 09/05/2026.
+//
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+#include "graph.h"
+
+// ניהול מבני נתונים וזיכרון
+
+Graph* create_graph(int nodes, int edges) {
+    // וידוא מגבלת הקודקודים
+    if (nodes <= 0 || nodes > MAX_NODES) return NULL;
+
+    Graph* g = (Graph*)malloc(sizeof(Graph));
+    if (g == NULL) return NULL;
+
+    g->num_nodes = nodes;
+    g->num_edges = edges;
+
+    // אתחול המטריצה בערך -1 (מסמל "אין קשת")
+    for (int i = 0; i < MAX_NODES; i++) {
+        for (int j = 0; j < MAX_NODES; j++) {
+            g->matrix[i][j] = -1;
+        }
+    }
+    return g;
+}
+
+void add_edge(Graph* g, int src, int dest, int weight) {
+    // בדיקת תקינות קלט ומשקלים שליליים
+    if (g == NULL || src < 0 || src >= g->num_nodes ||
+        dest < 0 || dest >= g->num_nodes || weight < 0) {
+        return;
+    }
+    g->matrix[src][dest] = weight;
+}
+
+void free_graph(Graph* g) {
+    if (g != NULL) {
+        free(g); // שחרור הזיכרון כנדרש
+    }
+}
+
+// תשתית גרפית
+
+void calculate_node_positions(Graph* g, int screen_width, int screen_height) {
+    if (g == NULL || g->num_nodes <= 0) return;
+
+    int center_x = screen_width / 2;
+    int center_y = screen_height / 2;
+    int radius = (screen_height / 2) - 60; // רדיוס המעגל
+
+    // פיזור הצמתים במעגל למניעת חפיפה ושיפור הקריאות
+    for (int i = 0; i < g->num_nodes; i++) {
+        // שימוש בקבוע PI מתוך raylib.h
+        float angle = (2.0f * PI * i) / (float)g->num_nodes;
+        g->node_positions[i].x = center_x + (int)(radius * cos(angle));
+        g->node_positions[i].y = center_y + (int)(radius * sin(angle));
+    }
+}
+
+// ניהול מצב האנימציה
+
+AnimationState* init_animation(int* path, int path_length) {
+    if (path == NULL || path_length <= 0) return NULL;
+
+    AnimationState* anim = (AnimationState*)malloc(sizeof(AnimationState));
+    if (anim == NULL) return NULL;
+
+    // העתקה של המסלול לתוך מבנה האנימציה
+    anim->path = (int*)malloc(path_length * sizeof(int));
+    if (anim->path == NULL) {
+        free(anim);
+        return NULL;
+    }
+    for (int i = 0; i < path_length; i++) anim->path[i] = path[i];
+
+    anim->path_length = path_length;
+    anim->current_path_index = 0;
+    anim->current_jump = 0;
+    anim->timer = 0.0f;
+    anim->is_playing = false; // מצב התחלתי - Play/Stop
+    anim->status = ANIM_IDLE;
+
+    return anim;
+}
+
+void free_animation(AnimationState* anim) {
+    if (anim != NULL) {
+        if (anim->path != NULL) free(anim->path);
+        free(anim);
+    }
+}

@@ -1,73 +1,117 @@
-#include "raylib.h"
-#include "gui.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include "graph.h"
+#include "parser.h"
+#include "dijkstra.h"
+#include "gui.h"     // הפונקציות והמבנים של נווה
+#include "raylib.h"  // ספריית הגרפיקה
 
-int main(void) {
-    // 1. Window Initialization
-    const int screenWidth = 800;
-    const int screenHeight = 600;
-    InitWindow(screenWidth, screenHeight, "The Schedulers - OS Traffic Simulation");
+int main(int argc, char *argv[]) {
+    // ==========================================
+    // 1. לוגיקה נוכחית (קריאה, בדיקות, דייקסטרה)
+    // ==========================================
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <file_name>\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    int src, dest;
+    Graph* graph = parse_graph_from_file(argv[1], &src, &dest);
+
+    if (graph == NULL) {
+        fprintf(stderr, "Error: Invalid input or negative weights detected.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (src < 0 || src >= graph->num_nodes || dest < 0 || dest >= graph->num_nodes) {
+        fprintf(stderr, "Error: Source or destination node out of bounds.\n");
+        free_graph(graph);
+        return EXIT_FAILURE;
+    }
+
+    // יציאה מוקדמת אם מקור שווה ליעד (ללא אנימציה)
+    if (src == dest) {
+        printf("%d\n0\n", src);
+        free_graph(graph);
+        return EXIT_SUCCESS;
+    }
+
+    // הרצת האלגוריתם של נדב
+    dijkstraResult result = find_shortest_path(graph->num_nodes, graph->matrix, src, dest);
+    bool has_path = (result.path[0] != -1);
+
+    // הדפסה לטרמינל
+    if (!has_path) {
+        printf("No path found\n");
+    } else {
+        for (int i = 0; i < result.path_length; i++) {
+            printf("%d", result.path[i]);
+            if (i < result.path_length - 1) {
+                printf(" -> ");
+            }
+        }
+        printf("\n%d\n", result.total_weight);
+    }
+
+    // ==========================================
+    // 2. שילוב ה-GUI של נווה
+    // ==========================================
+
+    // פתיחת חלון גרפי
+    InitWindow(800, 600, "Traffic Simulation 2026");
     SetTargetFPS(60);
 
-    // 2. Prepare Graph Data (Stage 2)
-    int numNodes = 10;
-    VisualNode nodes[15];
-    InitGraphVisuals(numNodes, nodes);
+    // אתחול הצמתים הגרפיים (פיזור במעגל)
+    VisualNode vNodes[MAX_NODES];
+    InitGraphVisuals(graph->num_nodes, vNodes);
 
-    // Dummy data for testing edges and weights
-    int testGraph[15][15] = {0};
-    testGraph[0][1] = 10; // Edge from 0 to 1 with weight 10 (will take 3 seconds)
-    testGraph[1][2] = 5;  // Edge from 1 to 2 with weight 5 (will take 1.5 seconds)
+    // אתחול הישות רק אם באמת נמצא מסלול
+    Entity car = {0};
+    if (has_path && result.path_length > 1) {
+        car.currentPos = vNodes[result.path[0]].pos;
+        car.startNode = 0; // האינדקס במסלול בו אנו מתחילים
+        car.endNode = 1;   // האינדקס של הצומת הבא
+        car.currentJump = 0;
+        car.timer = 0.0f;
+        car.isWaiting = true; // מתחילים בהמתנה בצומת הראשון
+    }
 
-    // 3. Prepare Animation Data (Stage 3)
-    bool animationRunning = false;
-    Rectangle buttonBounds = { 20, 50, 120, 40 };
-
-    // Dummy path for testing: from 0 to 1, then to 2
-    int testPath[] = {0, 1, 2};
-    int pathSize = 3;
-
-    // Initialize the moving entity
-    Entity myEntity = {0};
-    myEntity.currentPos = nodes[testPath[0]].pos;
-    myEntity.startNode = 0; // Current index in path (testPath) from which we depart
-    myEntity.endNode = 1;   // Current index in path to which we are traveling
-
-    // Game/Simulation Loop
+    // לולאת המשחק המרכזית (רצה כל פרייד עד שהמשתמש סוגר את החלון)
     while (!WindowShouldClose()) {
-        // --- Logic ---
 
-        // Check for Play/Stop button interaction
-        if (DrawButton(buttonBounds, animationRunning ? "STOP" : "PLAY", animationRunning)) {
-            animationRunning = !animationRunning;
+        // א. עדכון הלוגיקה (Movement)
+        if (has_path && result.path_length > 1) {
+            // מעדכנים תנועה כל עוד לא סיימנו את כל המסלול
+            if (car.endNode < result.path_length) {
+                UpdateEntity(&car, graph->num_nodes, vNodes, graph->matrix, result.path, result.path_length);
+            }
         }
 
-        // Update movement only if animation is running and the end of the path hasn't been reached
-        if (animationRunning && myEntity.endNode < pathSize) {
-            UpdateEntity(&myEntity, numNodes, nodes, testGraph, testPath, pathSize);
-        }
-
-        // --- Drawing ---
+        // ב. ציור המסך (Drawing)
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
-        // Title and Status
-        DrawText("Milestone 3: Traffic Animation Control", 20, 20, 20, DARKGRAY);
-        DrawText(TextFormat("Status: %s", animationRunning ? "RUNNING" : "PAUSED"), 160, 60, 18,
-                 animationRunning ? LIME : MAROON);
+        // ציור הגרף ברקע
+        DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix);
 
-        // Draw the static portion of the graph
-        DrawStaticGraph(numNodes, nodes, testGraph);
-
-        // Draw the dynamic entity
-        DrawEntity(myEntity);
-
-        // Draw the button (Ensuring it remains on the top layer)
-        DrawButton(buttonBounds, animationRunning ? "STOP" : "PLAY", animationRunning);
+        // ציור הישות או הודעת שגיאה
+        if (has_path && result.path_length > 1) {
+            DrawEntity(car);
+            // הדפסת המשקל הכולל למטה
+            DrawText(TextFormat("Total Weight: %d", result.total_weight), 20, 550, 20, DARKGREEN);
+        } else if (!has_path) {
+            DrawText("No path found!", 300, 20, 20, RED);
+        }
 
         EndDrawing();
     }
 
-    // Clean up and Close
+    // ==========================================
+    // 3. סגירה וניקוי זיכרון
+    // ==========================================
     CloseWindow();
-    return 0;
+    free_graph(graph);
+
+    return EXIT_SUCCESS;
 }
