@@ -6,56 +6,59 @@
 
 #include <stdbool.h>
 
-#define MAX_NODES 15 // מגבלת קודקודים
+#include "raylib.h"
 
-// מבנה עזר לשמירת קואורדינטות של צומת על המסך
+
+#define MAX_NODES 15 // Node limit
+
+// Helper structure to store node coordinates on the screen
 typedef struct {
     int x;
     int y;
 } Point2D;
 
-// הגדרת מבנה הנתונים של הגרף
+// Graph data structure definition
 typedef struct {
     int num_nodes;
     int num_edges;
-    int matrix[MAX_NODES][MAX_NODES];  // מטריצת שכנויות למשקלי הקשתות
-    Point2D node_positions[MAX_NODES]; // מיקומי הצמתים לתצוגה הגרפית
+    int matrix[MAX_NODES][MAX_NODES];  // Adjacency matrix for edge weights
+    Point2D node_positions[MAX_NODES]; // Node positions for graphical display
 } Graph;
 
-// מצבי האנימציה האפשריים של הישות הזזה
+// Possible animation states of the moving entity
 typedef enum {
-    ANIM_IDLE,          // האנימציה טרם התחילה או נעצרה לחלוטין
-    ANIM_WAITING_NODE,  // הישות ממתינה שנייה אחת שלמה בצומת
-    ANIM_MOVING_EDGE,   // הישות נמצאת במהלך תנועה על קשת
-    ANIM_FINISHED       // הישות הגיעה ליעד (להצגת ההודעה על המסך)
+    ANIM_IDLE,          // Animation hasn't started yet or is completely stopped
+    ANIM_WAITING_NODE,  // Entity waits for one full second at a node
+    ANIM_MOVING_EDGE,   // Entity is currently moving on an edge
+    ANIM_FINISHED       // Entity reached the destination (to display the message on screen)
 } AnimStatus;
 
-// מבנה הנתונים שמנהל את הישות הזזה על הגרף
+// Data structure managing the moving entity on the graph
 typedef struct {
-    int* path;              // המסלול (מועתק מהתוצאה של דייקסטרה)
-    int path_length;        // כמות הקודקודים במסלול
+    int* path;              // The path (copied from Dijkstra's result)
+    int path_length;        // Number of nodes in the path
 
-    int current_path_index; // היכן הישות נמצאת כרגע (אינדקס במערך path)
-    int current_jump;       // מונה קפיצות על הקשת הנוכחית (מתוך משקל הקשת W)
+    int current_path_index; // Where the entity is currently located (index in the path array)
+    int current_jump;       // Jump counter on the current edge (out of edge weight W)
 
-    float timer;            // טיימר פנימי מצטבר למעקב אחרי 300ms (קפיצה) או 1 שניה (המתנה)
+    float timer;            // Internal accumulator timer to track 300ms (jump) or 1 second (wait)
 
-    bool is_playing;        // דגל לשליטה על כפתור התחל/עצור (Play/Stop)
-    AnimStatus status;      // מצב הישות הנוכחי
+    bool is_playing;        // Flag to control the Play/Stop button
+    AnimStatus status;      // Current entity state
 } AnimationState;
 
-// --- ניהול גרף בסיסי ---
+// --- Basic graph management ---
 Graph* create_graph(int nodes, int edges);
 void add_edge(Graph* g, int src, int dest, int weight);
 void free_graph(Graph* g);
 
-// פונקציה שתחשב ותפזר את הצמתים במרחב כך שלא יחפפו
+// Function to calculate and distribute nodes in space so they don't overlap
 void calculate_node_positions(Graph* g, int screen_width, int screen_height);
 
-// מקצה את מבנה האנימציה ומאתחלת אותו עם המסלול שנמצא
+// Allocates the animation structure and initializes it with the found path
 AnimationState* init_animation(int* path, int path_length);
 
-// משחררת את הזיכרון של האנימציה בסיום למניעת דליפות זיכרון
+// Frees animation memory at the end to prevent memory leaks
 void free_animation(AnimationState* anim);
 
 #endif

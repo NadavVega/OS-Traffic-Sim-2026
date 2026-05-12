@@ -5,17 +5,12 @@
 #include <stdlib.h>
 #include <math.h>
 
-// הגדרה ידנית של פאי למקרה שהמערכת לא חשפה אותו
-#ifndef M_PI
-    #define M_PI 3.14159265358979323846
-#endif
-
 #include "graph.h"
 
-// ניהול מבני נתונים וזיכרון
+// Data structures and memory management
 
 Graph* create_graph(int nodes, int edges) {
-    // וידוא מגבלת הקודקודים
+    // Verify node limit
     if (nodes <= 0 || nodes > MAX_NODES) return NULL;
 
     Graph* g = (Graph*)malloc(sizeof(Graph));
@@ -24,7 +19,7 @@ Graph* create_graph(int nodes, int edges) {
     g->num_nodes = nodes;
     g->num_edges = edges;
 
-    // אתחול המטריצה בערך -1 (מסמל "אין קשת")
+    // Initialize matrix with -1 (indicates "no edge")
     for (int i = 0; i < MAX_NODES; i++) {
         for (int j = 0; j < MAX_NODES; j++) {
             g->matrix[i][j] = -1;
@@ -34,7 +29,7 @@ Graph* create_graph(int nodes, int edges) {
 }
 
 void add_edge(Graph* g, int src, int dest, int weight) {
-    // בדיקת תקינות קלט ומשקלים שליליים [cite: 72, 73]
+    // Validate input and check for negative weights
     if (g == NULL || src < 0 || src >= g->num_nodes ||
         dest < 0 || dest >= g->num_nodes || weight < 0) {
         return;
@@ -44,28 +39,29 @@ void add_edge(Graph* g, int src, int dest, int weight) {
 
 void free_graph(Graph* g) {
     if (g != NULL) {
-        free(g); // שחרור הזיכרון כנדרש
+        free(g); // Free memory as required
     }
 }
 
-// תשתית גרפית
+// Graphical infrastructure
 
 void calculate_node_positions(Graph* g, int screen_width, int screen_height) {
     if (g == NULL || g->num_nodes <= 0) return;
 
     int center_x = screen_width / 2;
     int center_y = screen_height / 2;
-    int radius = (screen_height / 2) - 60; // רדיוס המעגל
+    int radius = (screen_height / 2) - 60; // Circle radius
 
-    // פיזור הצמתים במעגל למניעת חפיפה ושיפור הקריאות
+    // Distribute nodes in a circle to prevent overlap and improve readability
     for (int i = 0; i < g->num_nodes; i++) {
-        float angle = (2.0f * (float)M_PI * i) / (float)g->num_nodes;
+        // Using PI constant from raylib.h
+        float angle = (2.0f * PI * i) / (float)g->num_nodes;
         g->node_positions[i].x = center_x + (int)(radius * cos(angle));
         g->node_positions[i].y = center_y + (int)(radius * sin(angle));
     }
 }
 
-// ניהול מצב האנימציה
+// Animation state management
 
 AnimationState* init_animation(int* path, int path_length) {
     if (path == NULL || path_length <= 0) return NULL;
@@ -73,7 +69,7 @@ AnimationState* init_animation(int* path, int path_length) {
     AnimationState* anim = (AnimationState*)malloc(sizeof(AnimationState));
     if (anim == NULL) return NULL;
 
-    // העתקה של המסלול לתוך מבנה האנימציה
+    // Copy the path into the animation structure
     anim->path = (int*)malloc(path_length * sizeof(int));
     if (anim->path == NULL) {
         free(anim);
@@ -85,7 +81,7 @@ AnimationState* init_animation(int* path, int path_length) {
     anim->current_path_index = 0;
     anim->current_jump = 0;
     anim->timer = 0.0f;
-    anim->is_playing = false; // מצב התחלתי - Play/Stop
+    anim->is_playing = false; // Initial state - Play/Stop
     anim->status = ANIM_IDLE;
 
     return anim;
