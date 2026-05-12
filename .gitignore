@@ -26,8 +26,6 @@ vgcore.*
 
 
 # Temp files to commit later
-gui.c
-gui.h
 temp
 
 # compiler output and intermediate files

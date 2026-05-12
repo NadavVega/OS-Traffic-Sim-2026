@@ -14,8 +14,10 @@ set(SOURCES
         src/main.c
         src/dijkstra.c
         src/dijkstra.h
+        src/gui.c
+        src/gui.h
 )
 
-add_executable(milestone1 ${SOURCES})
+add_executable(OS-Project ${SOURCES})
 
-target_link_libraries(milestone1 raylib m)
+target_link_libraries(OS-Project raylib m)
