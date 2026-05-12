@@ -1,74 +1,66 @@
-#include "dijkstra.h"
+#include "gui.h"
 #include <stdio.h>
-#include <stdlib.h>
 
-int main() {
-  // Attempt to open the input file as specified in the project requirements
-  FILE *file = fopen("input.txt", "r");
-  if (!file) {
-    perror("Error: Could not open input.txt");
-    return 1;
-  }
+int main(void) {
+  // 1. Initialize variables
+  int N = 0, M = 0;
+  int graph[15][15];
 
-  int N, M;
-  // Read the number of nodes (N) and edges (M) from the first line
-  if (fscanf(file, "%d %d", &N, &M) != 2) {
-    fclose(file);
-    return 1;
-  }
-
-  // Initialize the adjacency matrix with -1 to represent no existing edge
-  int graph[MAX_NODES][MAX_NODES];
-  for (int i = 0; i < MAX_NODES; i++) {
-    for (int j = 0; j < MAX_NODES; j++) {
+  // Initialize the matrix with -1 (no connections)
+  for (int i = 0; i < 15; i++) {
+    for (int j = 0; j < 15; j++) {
       graph[i][j] = -1;
     }
   }
 
-  // Read M edges from the file (src, dst, weight)
+  // 2. Load real data from input.txt
+  FILE *file = fopen("input.txt", "r");
+  if (!file) {
+    printf("Error: Could not open input.txt!\n");
+    return 1;
+  }
+
+  // Read number of nodes and edges
+  fscanf(file, "%d %d", &N, &M);
+
+  // Read each edge and its weight
   for (int i = 0; i < M; i++) {
     int u, v, w;
-    if (fscanf(file, "%d %d %d", &u, &v, &w) == 3) {
+    fscanf(file, "%d %d %d", &u, &v, &w);
+    if (u < 15 && v < 15) {
       graph[u][v] = w;
     }
   }
 
-  // Read the final line containing the source and destination query
+  // Read the query (start and end nodes)
   int start_node, end_node;
-  if (fscanf(file, "%d %d", &start_node, &end_node) != 2) {
-    fclose(file);
-    return 1;
-  }
+  fscanf(file, "%d %d", &start_node, &end_node);
   fclose(file);
 
-  // Execute the algorithm logic
-  dijkstraResult result = find_shortest_path(N, graph, start_node, end_node);
+  // 3. Initialize graphics window
+  InitWindow(800, 600, "The Schedulers - Milestone 2");
+  SetTargetFPS(60);
 
-  // Output handling based on project formatting rules
-  // Output handling based on precise project formatting rules
-  if (result.total_weight == -2) {
-    // Error case: Negative weights (already handled inside dijkstra.c)
-    return 1;
+  // 4. Prepare visuals (Calculating node positions in a circle)
+  VisualNode visualNodes[15];
+  InitGraphVisuals(N, visualNodes); // Uses N to arrange nodes
+
+  // 5. Main loop
+  while (!WindowShouldClose()) {
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+
+    // Milestone 2 Core: Draw the nodes and edges read from the file
+    // This function checks if graph[i][j] > 0 before drawing
+    DrawStaticGraph(N, visualNodes, graph);
+
+    // UI Text for validation
+    DrawText("Milestone 2: Static Graph from File", 20, 20, 20, DARKGRAY);
+    DrawText(TextFormat("Nodes: %d, Edges: %d", N, M), 20, 50, 18, MAROON);
+
+    EndDrawing();
   }
 
-  if (result.total_weight == -1) {
-    // Requirement: Print specific message if no path exists
-    printf("No path found\n");
-  } else if (start_node == end_node) {
-    // Requirement: If source equals destination, print 0 and 0 on separate
-    // lines
-    printf("0\n0\n");
-  } else {
-    // Requirement: Print path wrapped in $ with arrows (e.g., $0->2->1$)
-    printf("$");
-    for (int i = 0; i < result.path_length; i++) {
-      printf("%d%s", result.path[i], (i == result.path_length - 1) ? "" : "->");
-    }
-    printf("$\n");
-
-    // Requirement: Print the total accumulated weight on a new line
-    printf("%d\n", result.total_weight);
-  }
-
+  CloseWindow();
   return 0;
 }
