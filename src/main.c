@@ -1,73 +1,74 @@
-#include "raylib.h"
-#include "gui.h"
+#include "dijkstra.h"
+#include <stdio.h>
+#include <stdlib.h>
 
-int main(void) {
-    // 1. Window Initialization
-    const int screenWidth = 800;
-    const int screenHeight = 600;
-    InitWindow(screenWidth, screenHeight, "The Schedulers - OS Traffic Simulation");
-    SetTargetFPS(60);
+int main() {
+  // Attempt to open the input file as specified in the project requirements
+  FILE *file = fopen("input.txt", "r");
+  if (!file) {
+    perror("Error: Could not open input.txt");
+    return 1;
+  }
 
-    // 2. Prepare Graph Data (Stage 2)
-    int numNodes = 10;
-    VisualNode nodes[15];
-    InitGraphVisuals(numNodes, nodes);
+  int N, M;
+  // Read the number of nodes (N) and edges (M) from the first line
+  if (fscanf(file, "%d %d", &N, &M) != 2) {
+    fclose(file);
+    return 1;
+  }
 
-    // Dummy data for testing edges and weights
-    int testGraph[15][15] = {0};
-    testGraph[0][1] = 10; // Edge from 0 to 1 with weight 10 (will take 3 seconds)
-    testGraph[1][2] = 5;  // Edge from 1 to 2 with weight 5 (will take 1.5 seconds)
-
-    // 3. Prepare Animation Data (Stage 3)
-    bool animationRunning = false;
-    Rectangle buttonBounds = { 20, 50, 120, 40 };
-
-    // Dummy path for testing: from 0 to 1, then to 2
-    int testPath[] = {0, 1, 2};
-    int pathSize = 3;
-
-    // Initialize the moving entity
-    Entity myEntity = {0};
-    myEntity.currentPos = nodes[testPath[0]].pos;
-    myEntity.startNode = 0; // Current index in path (testPath) from which we depart
-    myEntity.endNode = 1;   // Current index in path to which we are traveling
-
-    // Game/Simulation Loop
-    while (!WindowShouldClose()) {
-        // --- Logic ---
-
-        // Check for Play/Stop button interaction
-        if (DrawButton(buttonBounds, animationRunning ? "STOP" : "PLAY", animationRunning)) {
-            animationRunning = !animationRunning;
-        }
-
-        // Update movement only if animation is running and the end of the path hasn't been reached
-        if (animationRunning && myEntity.endNode < pathSize) {
-            UpdateEntity(&myEntity, numNodes, nodes, testGraph, testPath, pathSize);
-        }
-
-        // --- Drawing ---
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
-
-        // Title and Status
-        DrawText("Milestone 3: Traffic Animation Control", 20, 20, 20, DARKGRAY);
-        DrawText(TextFormat("Status: %s", animationRunning ? "RUNNING" : "PAUSED"), 160, 60, 18,
-                 animationRunning ? LIME : MAROON);
-
-        // Draw the static portion of the graph
-        DrawStaticGraph(numNodes, nodes, testGraph);
-
-        // Draw the dynamic entity
-        DrawEntity(myEntity);
-
-        // Draw the button (Ensuring it remains on the top layer)
-        DrawButton(buttonBounds, animationRunning ? "STOP" : "PLAY", animationRunning);
-
-        EndDrawing();
+  // Initialize the adjacency matrix with -1 to represent no existing edge
+  int graph[MAX_NODES][MAX_NODES];
+  for (int i = 0; i < MAX_NODES; i++) {
+    for (int j = 0; j < MAX_NODES; j++) {
+      graph[i][j] = -1;
     }
+  }
 
-    // Clean up and Close
-    CloseWindow();
-    return 0;
+  // Read M edges from the file (src, dst, weight)
+  for (int i = 0; i < M; i++) {
+    int u, v, w;
+    if (fscanf(file, "%d %d %d", &u, &v, &w) == 3) {
+      graph[u][v] = w;
+    }
+  }
+
+  // Read the final line containing the source and destination query
+  int start_node, end_node;
+  if (fscanf(file, "%d %d", &start_node, &end_node) != 2) {
+    fclose(file);
+    return 1;
+  }
+  fclose(file);
+
+  // Execute the algorithm logic
+  dijkstraResult result = find_shortest_path(N, graph, start_node, end_node);
+
+  // Output handling based on project formatting rules
+  // Output handling based on precise project formatting rules
+  if (result.total_weight == -2) {
+    // Error case: Negative weights (already handled inside dijkstra.c)
+    return 1;
+  }
+
+  if (result.total_weight == -1) {
+    // Requirement: Print specific message if no path exists
+    printf("No path found\n");
+  } else if (start_node == end_node) {
+    // Requirement: If source equals destination, print 0 and 0 on separate
+    // lines
+    printf("0\n0\n");
+  } else {
+    // Requirement: Print path wrapped in $ with arrows (e.g., $0->2->1$)
+    printf("$");
+    for (int i = 0; i < result.path_length; i++) {
+      printf("%d%s", result.path[i], (i == result.path_length - 1) ? "" : "->");
+    }
+    printf("$\n");
+
+    // Requirement: Print the total accumulated weight on a new line
+    printf("%d\n", result.total_weight);
+  }
+
+  return 0;
 }
