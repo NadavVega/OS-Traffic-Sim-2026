@@ -4,9 +4,11 @@
 
 // Arrange nodes in a circle to prevent overlap (Stage 2)
 void InitGraphVisuals(int num_nodes, VisualNode nodes[]) {
-  float centerX = 400.0f;
-  float centerY = 300.0f;
-  float radius = 220.0f;
+  // New center for 1000x800 window
+  float centerX = 500.0f;
+  float centerY = 400.0f;
+  // Increased radius to utilize the extra space
+  float radius = 330.0f;
 
   for (int i = 0; i < num_nodes; i++) {
     nodes[i].id = i;
@@ -78,10 +80,11 @@ bool DrawButton(Rectangle bounds, const char *text, bool active) {
 }
 
 // Movement and timing logic (Stage 3)
+// Inside gui.c -> UpdateEntity()
 void UpdateEntity(Entity *entity, int num_nodes, VisualNode nodes[],
                   int graph[15][15], int path[], int pathSize) {
 
-  // Waiting state: Pause for one second at each node (Project requirement)
+  // Waiting state: Pause for one second at each node
   if (entity->isWaiting) {
     entity->timer += GetFrameTime();
     if (entity->timer >= 1.0f) {
@@ -91,32 +94,28 @@ void UpdateEntity(Entity *entity, int num_nodes, VisualNode nodes[],
     return;
   }
 
-  // Identify current edge nodes in the path
   int u = path[entity->startNode];
   int v = path[entity->endNode];
-  int w = graph[u][v]; // Edge weight determines the number of jumps
+  int w = graph[u][v];
 
   entity->timer += GetFrameTime();
 
-  // Each jump takes exactly 300 milliseconds (Project requirement)
-  if (entity->timer >= 0.3f) {
+  // The total time to traverse this edge is (weight * 0.3) seconds
+  float totalTravelTime = w * 0.3f;
+
+  if (entity->timer <= totalTravelTime) {
+    // Calculate smooth progression along the edge
+    float t = entity->timer / totalTravelTime;
+    entity->currentPos = Vector2Lerp(nodes[u].pos, nodes[v].pos, t);
+  } else {
+    // End of edge traversal
     entity->timer = 0;
-    entity->currentJump++;
+    entity->currentPos = nodes[v].pos; // Snap exactly to the node
+    entity->startNode++;
+    entity->endNode++;
 
-    if (entity->currentJump <= w) {
-      // Calculate linear progression (Interpolation) between nodes
-      float t = (float)entity->currentJump / w;
-      entity->currentPos = Vector2Lerp(nodes[u].pos, nodes[v].pos, t);
-    } else {
-      // End of edge traversal: Move to next nodes in path
-      entity->currentJump = 0;
-      entity->startNode++;
-      entity->endNode++;
-
-      // Enter waiting state if destination node hasn't been reached
-      if (entity->endNode < pathSize) {
-        entity->isWaiting = true;
-      }
+    if (entity->endNode < pathSize) {
+      entity->isWaiting = true;
     }
   }
 }

@@ -1,52 +1,46 @@
-# OS Project: Directed Graph Traffic Simulation
+# OS Project: Directed Graph Traffic Simulation - "The Schedulers"
 
 ## 1. Project Overview
 
-This project is a semester-long simulation of a movement system within a directed, weighted graph. It is designed to demonstrate core Operating Systems concepts, including:
+A simulation of movement within a directed graph, exploring OS concepts such as concurrency, IPC, and synchronization.
 
-- **Concurrency**: Multiple "passengers" implemented as independent processes moving simultaneously.
-- **IPC (Inter-Process Communication)**: Managing data flow and communication between active entities.
-- **Synchronization & Scheduling**: Utilizing mutexes, semaphores, and specific scheduling algorithms to manage shared resources and timing.
-- **Algorithms**: Efficient pathfinding using Dijkstra’s algorithm to find the shortest path between nodes.
-- **Visualization**: A graphical interface built with the raylib library to display nodes, edges, and movement.
+## 2. The Team
 
-## 2. The Team: "The Schedulers"
+| Name         | Role                   | Responsibilities                                    |
+| :----------- | :--------------------- | :-------------------------------------------------- |
+| **Nadav**    | **Algorithmic Engine** | Dijkstra implementation & shortest path logic.      |
+| **Nave**     | **GUI Developer**      | Raylib integration, graph rendering, and animation. |
+| **Bar**      | **System Integration** | Flow control, File I/O, and connecting modules.     |
+| **Binyamin** | **Reserve Duty**       | Will join for IPC/Synchronization modules.          |
 
-In accordance with course guidelines, every team member is responsible for understanding the entire codebase and must be active in the repository. To ensure organized progress, we have divided primary development focus as follows:
+## 3. Implementation Description
 
-| Name         | Primary Module Focus          | Core Responsibilities                                                                                                          |
-| :----------- | :---------------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
-| **Nadav**    | **Algorithmic Engine**        | Implementation of the Dijkstra algorithm, pathfinding logic, and graph weight management.                                      |
-| **Binyamin** | **Reserve Duty (IDF)**        | Currently on active reserve duty; will participate in the development of IPC and Synchronization modules in future milestones. |
-| **Nave**     | **Graphical Interface (GUI)** | Development of the visual engine using raylib, including node placement, directed arrows, and weight rendering.                |
-| **Bar**      | **System Integration & Flow** | Development of the main execution flow, file I/O integration, and module connectivity.                                         |
+- **Milestone 1**: Implemented Dijkstra's algorithm using an adjacency matrix. Handles directed edges and weight calculations.
+- **Milestone 2**: Created a circular layout for nodes. Visualized edges with directed arrows and legible weights using Raylib.
+- **Milestone 3**: Added a golden entity that moves along the calculated path. Implemented a 1-second pause at nodes and 300ms jumps per weight unit.
 
-## 3. Development Standards
+## 4. How to Build & Run
 
-- **Language**: C.
-- **Platform**: Linux.
-- **Version Control**: GitHub (Centralized repository with mandatory commits from all members).
-- **Build System**: CMake.
-- **Memory Safety**: Strict adherence to manual memory tracking to ensure no memory leaks; input validation for negative weights.
-- **Coding Principles**: Adherence to modular programming and SOLID principles where applicable in C.
+### Milestone 1
 
-## 4. Project Structure & Milestones
+```bash
+make milestone1
+./dijkstra <file-name>
+```
 
-The project is divided into seven key milestones to be completed throughout the semester:
+### Milestone2-6
 
-1. **Milestone 1**: Graph representation and Dijkstra algorithm implementation.
-2. **Milestone 2**: Graphical interface (GUI) to display the static graph with up to 15 nodes.
-3. **Future Steps**: Movement animation, multi-processing, IPC, synchronization, and scheduling.
+```bash
+make milestone2-6
+./sim <file-name>
+```
 
-## 5. How to Build & Run
+### Milestone7
 
-1. **Clone the repository**: `git clone [Your-Repo-URL]`
-2. **Create build directory**: `mkdir build && cd build`
-3. **Configure**: `cmake ..`
-4. **Compile**: `make`
-5. **Run**: `./OS_Project <input_file>`
+```bash
+make milestone7
+./sim -schd fcfs <file-name>
 
----
-
-- [Click here to watch the workflow](https://github.com/NadavVega/OS-Traffic-Sim-2026/wiki/Team-Git-&-GitHub-Workflow-Guide)
-- [Click here to watch the CMake instructions](https://github.com/NadavVega/OS-Traffic-Sim-2026/wiki/CMake-&-Build-System-Guide)
+make milestone7
+./sim -schd sjf <file-name>
+```

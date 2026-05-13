@@ -3,6 +3,6 @@
 
 #include "graph.h"
 
-Graph* parse_graph_from_file(const char* filename, int* src, int* dest);
+Graph *parse_graph_from_file(const char *filename, int *src, int *dest);
 
 #endif
