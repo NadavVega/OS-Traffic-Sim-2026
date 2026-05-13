@@ -23,3 +23,11 @@ traffic_sim     # Or whatever we name our final executable
 # Debugging / Core Dumps
 vgcore.*
 *.log
+
+
+# Temp files to commit later
+temp
+
+# compiler output and intermediate files
+input.txt
+milestone1

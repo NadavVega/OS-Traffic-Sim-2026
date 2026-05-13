@@ -8,15 +8,16 @@ set(CMAKE_C_STANDARD 11)
 
 find_package(raylib REQUIRED)
 
-include_directories(include)
+include_directories(src)
 
 set(SOURCES
         src/main.c
+        src/dijkstra.c
+        src/dijkstra.h
         src/gui.c
-        include/gui.h
-
+        src/gui.h
 )
 
-add_executable(OS_Project ${SOURCES})
+add_executable(OS-Project ${SOURCES})
 
-target_link_libraries(OS_Project raylib m)
+target_link_libraries(OS-Project raylib m)

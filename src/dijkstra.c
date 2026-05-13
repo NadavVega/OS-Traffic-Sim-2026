@@ -1,5 +1,6 @@
 #include "dijkstra.h"
 #include <limits.h>
+#include <stdio.h>
 
 // Function to find the vertex with the minimum distance
 int find_min_distance(int num_nodes, int dist[], int visited[]) {
@@ -19,6 +20,17 @@ dijkstraResult find_shortest_path(int num_nodes,
                                   int graph[MAX_NODES][MAX_NODES], int start,
                                   int end) {
   dijkstraResult result;
+  result.path_length = 0;
+  result.total_weight = -1; // Default to -1 for no path
+
+  // checking the validity of start and end nodes
+  if (start == end) {
+    result.path[0] = start;
+    result.path_length = 1;
+    result.total_weight = 0;
+    return result;
+  }
+
   int dist[MAX_NODES];
   int visited[MAX_NODES];
   int prev[MAX_NODES];
@@ -41,6 +53,12 @@ dijkstraResult find_shortest_path(int num_nodes,
 
     // Update distances of adjacent vertices
     for (int v = 0; v < num_nodes; v++) {
+      if (graph[u][v] < 0 && graph[u][v] != -1) {
+        printf("Error: Negative weight detected. Invalid input.\n");
+        result.total_weight = -2; // Indicate error due to negative weight
+        return result;
+      }
+
       if (!visited[v] && graph[u][v] != -1 && dist[u] != INT_MAX &&
           dist[u] + graph[u][v] < dist[v]) {
         dist[v] = dist[u] + graph[u][v];
@@ -55,7 +73,8 @@ dijkstraResult find_shortest_path(int num_nodes,
 
   if (dist[end] == INT_MAX) {
     // No path found
-    result.path[0] = -1; // Indicate no path
+    result.path[0] = -1;
+    result.total_weight = -1;
     return result;
   }
 
