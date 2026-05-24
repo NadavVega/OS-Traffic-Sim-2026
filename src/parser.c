@@ -1,47 +1,87 @@
 #include "parser.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-Graph *parse_graph_from_file(const char *filename, int *src, int *dest) {
-  FILE *fp = fopen(filename, "r");
-  if (fp == NULL) {
-    perror("Error opening file");
-    return NULL;
-  }
+Graph *parse_graph_from_file(const char *filename, Traveler **travelers, int *num_travelers) {
+    FILE *fp = fopen(filename, "r");
+    if (fp == NULL) {
+        perror("Error opening file");
+        return NULL;
+    }
 
-  int nodes, edges;
-  // Read the first line: number of nodes and edges
-  if (fscanf(fp, "%d %d", &nodes, &edges) != 2) {
-    fclose(fp);
-    return NULL;
-  }
+    int nodes, edges;
+    // Read the first line: number of nodes and edges
+    if (fscanf(fp, "%d %d", &nodes, &edges) != 2) {
+        fclose(fp);
+        return NULL;
+    }
 
-  // Create the graph (ensures we don't exceed 15 nodes)
-  Graph *g = create_graph(nodes, edges);
-  if (g == NULL) {
-    fclose(fp);
-    return NULL;
-  }
+    // Create the graph infrastructure in memory
+    Graph *g = create_graph(nodes, edges);
+    if (g == NULL) {
+        fclose(fp);
+        return NULL;
+    }
 
-  // Read the edges
-  for (int i = 0; i < edges; i++) {
-    int u, v, w;
-    if (fscanf(fp, "%d %d %d", &u, &v, &w) == 3) {
-      // Check for negative weights - mandatory requirement from the lecturer
-      if (w < 0) {
+    // Read the edges and their weights
+    for (int i = 0; i < edges; i++) {
+        int u, v, w;
+        if (fscanf(fp, "%d %d %d", &u, &v, &w) == 3) {
+            // Validate negative weights
+            if (w < 0) {
+                free_graph(g);
+                fclose(fp);
+                return NULL;
+            }
+            add_edge(g, u, v, w);
+        }
+    }
+
+    // Step A: Scan the file until the #travelers tag is found
+    char token[100];
+    bool found_travelers = false;
+    while (fscanf(fp, "%99s", token) == 1) {
+        if (strcmp(token, "#travelers") == 0) {
+            found_travelers = true;
+            break;
+        }
+    }
+
+    // If the tag is not found in the file, clean memory and return an error
+    if (!found_travelers) {
         free_graph(g);
         fclose(fp);
         return NULL;
-      }
-      add_edge(g, u, v, w);
     }
-  }
 
-  // Read the last line: source and destination for the query
-  if (fscanf(fp, "%d %d", src, dest) != 2) {
-    // If information is missing, use default values or return an error
-  }
+    // Step B: Read the total number of travelers
+    if (fscanf(fp, "%d", num_travelers) != 1) {
+        free_graph(g);
+        fclose(fp);
+        return NULL;
+    }
 
-  fclose(fp);
-  return g;
+    // Step C: Dynamic memory allocation for the travelers array based on the read count
+    *travelers = (Traveler *)malloc((*num_travelers) * sizeof(Traveler));
+    if (*travelers == NULL) {
+        free_graph(g);
+        fclose(fp);
+        return NULL;
+    }
+
+    // Step D: Loop to read the source and destination pairs for each traveler
+    for (int i = 0; i < *num_travelers; i++) {
+        if (fscanf(fp, "%d %d", &((*travelers)[i].src), &((*travelers)[i].dest)) != 2) {
+            free(*travelers);
+            free_graph(g);
+            fclose(fp);
+            return NULL;
+        }
+        // Initialize default value for PID to prevent garbage values in memory
+        (*travelers)[i].pid = 0;
+    }
+
+    fclose(fp);
+    return g;
 }
