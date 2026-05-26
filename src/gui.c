@@ -81,48 +81,56 @@ bool DrawButton(Rectangle bounds, const char *text, bool active) {
 
 // Movement and timing logic (Stage 3)
 // Inside gui.c -> UpdateEntity()
-void UpdateEntity(Entity *entity, int num_nodes, VisualNode nodes[],
-                  int graph[15][15], int path[], int pathSize) {
+// Movement and timing logic for multiple travelers (Stage 2 - Multi-traveler)
+void UpdateEntities(Entity entities[], int num_travelers, int num_nodes, VisualNode nodes[],
+                    int graph[15][15], int path[], int pathSize) {
 
-  // Waiting state: Pause for one second at each node
-  if (entity->isWaiting) {
-    entity->timer += GetFrameTime();
-    if (entity->timer >= 1.0f) {
-      entity->isWaiting = false;
-      entity->timer = 0;
+  // Loop through all travelers in the array
+  for (int i = 0; i < num_travelers; i++) {
+    // Create a pointer to the current traveler to keep your existing logic intact
+    Entity *entity = &entities[i];
+
+    // Waiting state: Pause for one second at each node
+    if (entity->isWaiting) {
+      entity->timer += GetFrameTime();
+      if (entity->timer >= 1.0f) {
+        entity->isWaiting = false;
+        entity->timer = 0;
+      }
+      continue; // Move to the next traveler in the loop
     }
-    return;
-  }
 
-  int u = path[entity->startNode];
-  int v = path[entity->endNode];
-  int w = graph[u][v];
+    int u = path[entity->startNode];
+    int v = path[entity->endNode];
+    int w = graph[u][v];
 
-  entity->timer += GetFrameTime();
+    entity->timer += GetFrameTime();
 
-  // The total time to traverse this edge is (weight * 0.3) seconds
-  float totalTravelTime = w * 0.3f;
+    // The total time to traverse this edge is (weight * 0.3) seconds
+    float totalTravelTime = w * 0.3f;
 
-  if (entity->timer <= totalTravelTime) {
-    // Calculate smooth progression along the edge
-    float t = entity->timer / totalTravelTime;
-    entity->currentPos = Vector2Lerp(nodes[u].pos, nodes[v].pos, t);
-  } else {
-    // End of edge traversal
-    entity->timer = 0;
-    entity->currentPos = nodes[v].pos; // Snap exactly to the node
-    entity->startNode++;
-    entity->endNode++;
+    if (entity->timer <= totalTravelTime) {
+      // Calculate smooth progression along the edge
+      float t = entity->timer / totalTravelTime;
+      entity->currentPos = Vector2Lerp(nodes[u].pos, nodes[v].pos, t);
+    } else {
+      // End of edge traversal
+      entity->timer = 0;
+      entity->currentPos = nodes[v].pos; // Snap exactly to the node
+      entity->startNode++;
+      entity->endNode++;
 
-    if (entity->endNode < pathSize) {
-      entity->isWaiting = true;
+      if (entity->endNode < pathSize) {
+        entity->isWaiting = true;
+      }
     }
   }
 }
-
-// Draw the moving entity (Stage 3)
-void DrawEntity(Entity entity) {
-  DrawCircleV(entity.currentPos, 12,
-              GOLD); // Golden circle representing the vehicle/passenger
-  DrawCircleLines(entity.currentPos.x, entity.currentPos.y, 12, BLACK);
+// Draw all moving entities from the array (Stage 2 - Multi-traveler)
+void DrawEntities(Entity entities[], int num_travelers) {
+  // Loop and draw each traveler as a golden circle
+  for (int i = 0; i < num_travelers; i++) {
+    DrawCircleV(entities[i].currentPos, 12, GOLD); // Golden circle representing the vehicle/passenger
+    DrawCircleLines(entities[i].currentPos.x, entities[i].currentPos.y, 12, BLACK);
+  }
 }

@@ -30,10 +30,10 @@ typedef struct {
     bool isWaiting;       // Indicates if the entity is currently waiting at a node
 } Entity;
 
-// Function to update the entity's movement logic
-void UpdateEntity(Entity* entity, int num_nodes, VisualNode nodes[], int graph[15][15], int path[], int pathSize);
+// Function to update the movement logic for all entities in the array
+void UpdateEntities(Entity entities[], int num_travelers, int num_nodes, VisualNode nodes[], int graph[15][15], int path[], int pathSize);
 
-// Function to render the entity on the screen
-void DrawEntity(Entity entity);
+// Function to render all entities from the array on the screen
+void DrawEntities(Entity entities[], int num_travelers);
 
 #endif // GUI_H
