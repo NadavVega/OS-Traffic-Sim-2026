@@ -2,6 +2,11 @@
 #include "raymath.h"
 #include <math.h>
 
+// Predefined colors for up to 15 travelers (Stage 4 - Unique Colors)
+const Color travelerColors[15] = {RED,    ORANGE,  YELLOW, GREEN, BLUE,
+                                  PURPLE, PINK,    BROWN,  GRAY,  MAROON,
+                                  LIME,   SKYBLUE, VIOLET, GOLD,  DARKGREEN};
+
 // Arrange nodes in a circle to prevent overlap (Stage 2)
 void InitGraphVisuals(int num_nodes, VisualNode nodes[]) {
   // New center for 1000x800 window
@@ -82,13 +87,18 @@ bool DrawButton(Rectangle bounds, const char *text, bool active) {
 // Movement and timing logic (Stage 3)
 // Inside gui.c -> UpdateEntity()
 // Movement and timing logic for multiple travelers (Stage 2 - Multi-traveler)
-void UpdateEntities(Entity entities[], int num_travelers, int num_nodes, VisualNode nodes[],
-                    int graph[15][15], int path[], int pathSize) {
+void UpdateEntities(Entity entities[], int num_travelers, int num_nodes,
+                    VisualNode nodes[], int graph[15][15],
+                    Traveler travelers[]) {
 
   // Loop through all travelers in the array
   for (int i = 0; i < num_travelers; i++) {
-    // Create a pointer to the current traveler to keep your existing logic intact
+    // Create a pointer to the current traveler to keep your existing logic
+    // intact
     Entity *entity = &entities[i];
+
+    if (entity->endNode >= travelers[i].path_length)
+      continue; // Skip if traveler has reached the end of their path
 
     // Waiting state: Pause for one second at each node
     if (entity->isWaiting) {
@@ -100,8 +110,8 @@ void UpdateEntities(Entity entities[], int num_travelers, int num_nodes, VisualN
       continue; // Move to the next traveler in the loop
     }
 
-    int u = path[entity->startNode];
-    int v = path[entity->endNode];
+    int u = travelers[i].path[entity->startNode];
+    int v = travelers[i].path[entity->endNode];
     int w = graph[u][v];
 
     entity->timer += GetFrameTime();
@@ -120,7 +130,7 @@ void UpdateEntities(Entity entities[], int num_travelers, int num_nodes, VisualN
       entity->startNode++;
       entity->endNode++;
 
-      if (entity->endNode < pathSize) {
+      if (entity->endNode < travelers[i].path_length) {
         entity->isWaiting = true;
       }
     }
@@ -130,7 +140,10 @@ void UpdateEntities(Entity entities[], int num_travelers, int num_nodes, VisualN
 void DrawEntities(Entity entities[], int num_travelers) {
   // Loop and draw each traveler as a golden circle
   for (int i = 0; i < num_travelers; i++) {
-    DrawCircleV(entities[i].currentPos, 12, GOLD); // Golden circle representing the vehicle/passenger
-    DrawCircleLines(entities[i].currentPos.x, entities[i].currentPos.y, 12, BLACK);
+    DrawCircleV(
+        entities[i].currentPos, 12,
+        entities[i].color); // Use the unique color assigned to each traveler
+    DrawCircleLines(entities[i].currentPos.x, entities[i].currentPos.y, 12,
+                    BLACK);
   }
 }
