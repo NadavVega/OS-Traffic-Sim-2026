@@ -45,22 +45,26 @@ int main(int argc, char *argv[]) {
     VisualNode vNodes[MAX_NODES];
     InitGraphVisuals(graph->num_nodes, vNodes);
 
-    Entity car = {0};
+    // Target Stage 2: Array of entities and number of travelers
+    Entity cars[1];
+    int num_travelers = 1;
     bool animationRunning = false; // Required for PLAY/STOP functionality
 
     if (has_path && result.path_length > 0) {
-        car.currentPos = vNodes[result.path[0]].pos;
-        car.startNode = 0; 
-        car.endNode = 1;  
+        cars[0].currentPos = vNodes[result.path[0]].pos;
+        cars[0].startNode = 0;
+        cars[0].endNode = 1;
+        cars[0].isWaiting = false;
+        cars[0].timer = 0.0f;
     }
 
     Rectangle buttonBounds = { 20, 100, 120, 40 };
 
     // Main game loop
     while (!WindowShouldClose()) {
-        // Update movement logic only if PLAY is active
-        if (animationRunning && has_path && car.endNode < result.path_length) {
-            UpdateEntity(&car, graph->num_nodes, vNodes, graph->matrix, result.path, result.path_length);
+        // Update all entities using your new function
+        if (animationRunning && has_path && cars[0].endNode < result.path_length) {
+            UpdateEntities(cars, num_travelers, graph->num_nodes, vNodes, graph->matrix, result.path, result.path_length);
         }
 
         BeginDrawing();
@@ -83,13 +87,13 @@ int main(int argc, char *argv[]) {
             animationRunning = !animationRunning;
         }
 
-        // Draw entity and completion message
+        // Draw entities and completion message using your new function
         if (has_path) {
-            DrawEntity(car);
-            
-            if (car.endNode >= result.path_length) {
+            DrawEntities(cars, num_travelers);
+
+            if (cars[0].endNode >= result.path_length) {
                 DrawText("DESTINATION REACHED!", 350, 400, 30, LIME);
-                animationRunning = false; 
+                animationRunning = false;
             }
         }
 
