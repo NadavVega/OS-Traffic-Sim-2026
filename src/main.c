@@ -1,6 +1,7 @@
 #include "dijkstra.h"
 #include "graph.h"
 #include "gui.h" // Nave's functions
+#include "ipc.h" // For inter-process communication
 #include "parser.h"
 #include "raylib.h" // Graphics library
 #include <signal.h>
@@ -53,8 +54,15 @@ int main(int argc, char *argv[]) {
   }
 
   // ==========================================
-  // 3. Create child processes
+  // 3. Create child processes and pipe
   // ==========================================
+
+  int fd[2];
+  if (init_ipc(fd) == -1) {
+    fprintf(stderr, "Error: Failed to initialize IPC.\n");
+    return EXIT_FAILURE;
+  }
+
   for (int i = 0; i < num_travelers; i++) {
     if (travelers[i].path_length == 0)
       continue; // Skip if no path
