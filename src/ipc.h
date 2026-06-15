@@ -1,17 +1,23 @@
 #ifndef IPC_H
 #define IPC_H
+
 #include <sys/types.h>
-#include <unistd.h>
+
+typedef enum {
+  IPC_EN_ROUTE = 0,
+  IPC_ARRIVED_DEST = 1,
+  IPC_FINISHED = 2
+} IpcStatus;
 
 typedef struct {
-  pid_t child_pid;
+  pid_t pid;
   int current_node;
   int next_node;
-  int is_finished;
-} ipc_message_t;
+  IpcStatus status;
+} IpcMessage;
 
-int init_ipc(int pipe_fd[2]);
-int send_message(int write_fd, ipc_message_t *message);
-int receive_message(int read_fd, ipc_message_t *message);
+int ipc_create_pipe(int pipe_fd[2]);
+int ipc_send_message(int write_fd, const IpcMessage *message);
+int ipc_read_message(int read_fd, IpcMessage *message);
 
 #endif // IPC_H

@@ -1,7 +1,14 @@
+#ifndef MILESTONE
+#define MILESTONE 4
+#endif
+
 #include "child.h"
 #include "dijkstra.h"
 #include "graph.h"
 #include "gui.h" // Nave's functions
+#if MILESTONE == 5
+#include "ipc.h"
+#endif
 #include "parser.h"
 #include "raylib.h" // Graphics library
 #include <errno.h>
@@ -13,6 +20,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#if MILESTONE == 4
 static void terminate_and_wait_for_child(pid_t *pid, bool *termination_sent) {
   if (*pid <= 0) {
     return;
@@ -33,6 +41,7 @@ static void terminate_and_wait_for_child(pid_t *pid, bool *termination_sent) {
   }
   *pid = 0;
 }
+#endif
 
 int main(int argc, char *argv[]) {
   // ==========================================
@@ -52,6 +61,70 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
+#if MILESTONE == 5
+  int pipe_fd[2];
+  if (ipc_create_pipe(pipe_fd) == -1) {
+    free(travelers);
+    free_graph(graph);
+    return EXIT_FAILURE;
+  }
+
+  int children_started = 0;
+  for (int i = 0; i < num_travelers; i++) {
+    pid_t pid = fork();
+    if (pid < 0) {
+      fprintf(stderr, "Error: Failed to fork process for traveler %d\n", i);
+      close(pipe_fd[0]);
+      close(pipe_fd[1]);
+      for (int j = 0; j < children_started; j++) {
+        kill(travelers[j].pid, SIGTERM);
+        waitpid(travelers[j].pid, NULL, 0);
+      }
+      free(travelers);
+      free_graph(graph);
+      return EXIT_FAILURE;
+    }
+    if (pid == 0) {
+      close(pipe_fd[0]);
+      run_child_process(graph, travelers[i].src, travelers[i].dest,
+                        pipe_fd[1]);
+    }
+
+    travelers[i].pid = pid;
+    children_started++;
+  }
+
+  close(pipe_fd[1]);
+
+  IpcMessage message;
+  int read_result;
+  while ((read_result = ipc_read_message(pipe_fd[0], &message)) > 0) {
+    // Phase 4 will consume these messages for GUI updates and formatted logs.
+  }
+  close(pipe_fd[0]);
+
+  int exit_status = read_result == -1 ? EXIT_FAILURE : EXIT_SUCCESS;
+  for (int i = 0; i < num_travelers; i++) {
+    int child_status = 0;
+    pid_t wait_result;
+    do {
+      wait_result = waitpid(travelers[i].pid, &child_status, 0);
+    } while (wait_result == -1 && errno == EINTR);
+
+    if (wait_result == -1) {
+      perror("Error: Failed to wait for child");
+      exit_status = EXIT_FAILURE;
+      continue;
+    }
+    if (!WIFEXITED(child_status) || WEXITSTATUS(child_status) != EXIT_SUCCESS) {
+      exit_status = EXIT_FAILURE;
+    }
+  }
+
+  free(travelers);
+  free_graph(graph);
+  return exit_status;
+#else
   // ==========================================
   // 2. Claculate path for all travelers
   // ==========================================
@@ -212,4 +285,5 @@ int main(int argc, char *argv[]) {
   CloseWindow();
 
   return EXIT_SUCCESS;
+#endif
 }
