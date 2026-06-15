@@ -24,6 +24,9 @@ void DrawStaticGraph(int num_nodes, VisualNode nodes[], int graph[15][15]);
 // Function to handle interactive button rendering and click detection
 bool DrawButton(Rectangle bounds, const char *text, bool active);
 
+// Draws the final state message after all travelers have completed.
+void DrawCompletionMessage(const char *text);
+
 // Structure for managing the state of the moving entity
 typedef struct {
   Vector2 currentPos; // Current position in pixels

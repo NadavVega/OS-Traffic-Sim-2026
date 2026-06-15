@@ -84,6 +84,22 @@ bool DrawButton(Rectangle bounds, const char *text, bool active) {
   return clicked;
 }
 
+void DrawCompletionMessage(const char *text) {
+  const int fontSize = 30;
+  const int padding = 20;
+  int textWidth = MeasureText(text, fontSize);
+  Rectangle background = {
+      .x = (1000.0f - textWidth) / 2.0f - padding,
+      .y = 60.0f,
+      .width = textWidth + padding * 2.0f,
+      .height = fontSize + padding,
+  };
+
+  DrawRectangleRec(background, RAYWHITE);
+  DrawRectangleLinesEx(background, 3.0f, DARKGREEN);
+  DrawText(text, (1000 - textWidth) / 2, 70, fontSize, DARKGREEN);
+}
+
 // Movement and timing logic (Stage 3)
 // Inside gui.c -> UpdateEntity()
 // Movement and timing logic for multiple travelers (Stage 2 - Multi-traveler)

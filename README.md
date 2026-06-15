@@ -122,8 +122,8 @@ Milestone 4 uses parent-controlled routes and GUI movement:
 - When a traveler completes its route, the parent sends that child's PID
   `SIGTERM`.
 - The parent waits for and reaps every child before exiting.
-- After all routes complete, the final state is shown briefly and the
-  application closes normally with exit code `0`.
+- After all routes complete, the final traveler positions and a completion
+  message remain visible until the user closes the window normally.
 - If the GUI closes early or cannot initialize, remaining children are
   terminated and reaped.
 
@@ -146,8 +146,8 @@ Milestone 5 uses autonomous children and IPC-driven GUI updates:
   reported positions and resumes visible updates.
 - The parent waits for and reaps completed children.
 - After every child reports completion and is reaped, the final destination
-  state is shown briefly and the application closes normally with exit code
-  `0`.
+  state and completion message remain visible until the user closes the window
+  normally.
 - On GUI close or initialization failure, remaining children are terminated and
   reaped.
 

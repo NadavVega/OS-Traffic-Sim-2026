@@ -284,11 +284,11 @@ int main(int argc, char *argv[]) {
   bool isPlaying = false;
   bool children_started = false;
   bool pipe_open = true;
-  float completion_timer = 0.0f;
-  bool simulation_complete = false;
+  bool simulationCompleted = false;
+  bool completionCleanupDone = false;
 
-  while (!WindowShouldClose() && !simulation_complete) {
-    if (children_started && pipe_open) {
+  while (!WindowShouldClose()) {
+    if (!simulationCompleted && children_started && pipe_open) {
       for (;;) {
         IpcMessage message;
         IpcReadResult read_result = ipc_read_message(pipe_fd[0], &message);
@@ -304,20 +304,27 @@ int main(int argc, char *argv[]) {
         break;
       }
     }
-    if (children_started) {
+    if (!simulationCompleted && children_started) {
       reap_exited_children(travelers, child_reaped, num_travelers);
     }
 
-    if (isPlaying) {
+    if (!simulationCompleted && isPlaying) {
       for (int i = 0; i < num_travelers; i++) {
         cars[i].currentPos = vNodes[cars[i].currentNode].pos;
       }
 
       if (children_started &&
           all_ms5_children_finished(cars, child_reaped, num_travelers)) {
-        completion_timer += GetFrameTime();
-        if (completion_timer >= 0.75f) {
-          simulation_complete = true;
+        simulationCompleted = true;
+        isPlaying = false;
+        if (!completionCleanupDone) {
+          if (pipe_open) {
+            close(pipe_fd[0]);
+            pipe_open = false;
+          }
+          terminate_and_wait_for_ms5_children(travelers, child_reaped,
+                                              num_travelers);
+          completionCleanupDone = true;
         }
       }
     }
@@ -326,13 +333,18 @@ int main(int argc, char *argv[]) {
     ClearBackground(RAYWHITE);
     DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix);
     DrawText("Milestone 5: IPC Traffic Animation", 20, 20, 20, DARKGRAY);
-    if (DrawButton(buttonBounds, isPlaying ? "STOP" : "PLAY", isPlaying)) {
-      isPlaying = !isPlaying;
+    if (!simulationCompleted) {
+      if (DrawButton(buttonBounds, isPlaying ? "STOP" : "PLAY", isPlaying)) {
+        isPlaying = !isPlaying;
+      }
     }
     DrawEntities(cars, num_travelers);
+    if (simulationCompleted) {
+      DrawCompletionMessage("All travelers reached their destinations");
+    }
     EndDrawing();
 
-    if (isPlaying && !children_started) {
+    if (!simulationCompleted && isPlaying && !children_started) {
       if (start_ms5_children(graph, travelers, num_travelers, pipe_fd,
                              child_reaped) == -1) {
         pipe_open = false;
@@ -469,13 +481,12 @@ int main(int argc, char *argv[]) {
   }
 
   Rectangle buttonBounds = {20, 100, 120, 40};
-  float completion_timer = 0.0f;
-  bool simulation_complete = false;
+  bool simulationCompleted = false;
 
   // Main game loop
-  while (!WindowShouldClose() && !simulation_complete) {
+  while (!WindowShouldClose()) {
     // Update all entities using your new function
-    if (animationRunning) {
+    if (!simulationCompleted && animationRunning) {
       UpdateEntities(cars, num_travelers, graph->num_nodes, vNodes,
                      graph->matrix, travelers);
 
@@ -489,10 +500,8 @@ int main(int argc, char *argv[]) {
 
       if (all_ms4_children_finished(travelers, termination_sent,
                                     num_travelers)) {
-        completion_timer += GetFrameTime();
-        if (completion_timer >= 0.75f) {
-          simulation_complete = true;
-        }
+        simulationCompleted = true;
+        animationRunning = false;
       }
     }
 
@@ -507,13 +516,18 @@ int main(int argc, char *argv[]) {
              DARKGRAY);
 
     // Interactive Play/Stop Button
-    if (DrawButton(buttonBounds, animationRunning ? "STOP" : "PLAY",
-                   animationRunning)) {
-      animationRunning = !animationRunning;
+    if (!simulationCompleted) {
+      if (DrawButton(buttonBounds, animationRunning ? "STOP" : "PLAY",
+                     animationRunning)) {
+        animationRunning = !animationRunning;
+      }
     }
 
     // Draw entities and completion message using your new function
     DrawEntities(cars, num_travelers);
+    if (simulationCompleted) {
+      DrawCompletionMessage("All travelers reached their destinations");
+    }
     EndDrawing();
   }
 
