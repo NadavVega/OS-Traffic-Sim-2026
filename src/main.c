@@ -1,9 +1,10 @@
+#include "child.h"
 #include "dijkstra.h"
 #include "graph.h"
 #include "gui.h" // Nave's functions
-#include "ipc.h" // For inter-process communication
 #include "parser.h"
 #include "raylib.h" // Graphics library
+#include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -11,6 +12,27 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+static void terminate_and_wait_for_child(pid_t *pid, bool *termination_sent) {
+  if (*pid <= 0) {
+    return;
+  }
+
+  if (!*termination_sent) {
+    if (kill(*pid, SIGTERM) == -1 && errno != ESRCH) {
+      perror("Error: Failed to terminate child");
+    }
+    *termination_sent = true;
+  }
+
+  while (waitpid(*pid, NULL, 0) == -1) {
+    if (errno != EINTR) {
+      perror("Error: Failed to wait for child");
+      break;
+    }
+  }
+  *pid = 0;
+}
 
 int main(int argc, char *argv[]) {
   // ==========================================
@@ -54,60 +76,35 @@ int main(int argc, char *argv[]) {
   }
 
   // ==========================================
-  // 3. Create child processes and pipe
+  // 3. Create one child process per traveler
   // ==========================================
-  int fd[2];
-  if (init_ipc(fd) == -1) {
-    fprintf(stderr, "Error: Failed to initialize IPC.\n");
+  bool *termination_sent = calloc(num_travelers, sizeof(bool));
+  if (termination_sent == NULL) {
+    fprintf(stderr, "Error: Failed to allocate child process state.\n");
     return EXIT_FAILURE;
   }
 
   for (int i = 0; i < num_travelers; i++) {
-    if (travelers[i].path_length == 0)
-      continue; // Skip if no path
-
     pid_t pid = fork();
     if (pid < 0) {
       fprintf(stderr, "Error: Failed to fork process for traveler %d\n", i);
-      exit(EXIT_FAILURE);
-    } else if (pid == 0) {
-      // -------- child ----------
-      close(fd[0]); // הבן רק כותב לצינור, סוגר את קצה הקריאה
-
-      printf("[%d] Traveler %d started simulation\n", getpid(), i);
-      fflush(stdout);
-
-      // סימולציית התקדמות: הבן עובר על המסלול ושולח עדכונים לאב
-      for (int j = 0; j < travelers[i].path_length - 1; j++) {
-        ipc_message_t msg;
-        msg.child_pid = getpid();
-        msg.current_node = travelers[i].path[j];
-        msg.next_node = travelers[i].path[j + 1];
-        msg.is_finished = 0;
-
-        // שליחת הודעה לאב שהוא מתחיל לזוז בין הצמתים
-        send_message(fd[1], &msg);
-
-        // סימולציה של זמן נסיעה (משקל הקשת כפול 300ms)
-        int weight = graph->matrix[msg.current_node][msg.next_node];
-        usleep(weight * 300000);
-
-        // עצירה של שנייה בצומת (לפי הלוגיקה של נווה)
-        usleep(1000000);
+      for (int j = 0; j < i; j++) {
+        terminate_and_wait_for_child(&travelers[j].pid,
+                                     &termination_sent[j]);
       }
-
-      // הודעת סיום מהבן
-      ipc_message_t final_msg = { .child_pid = getpid(), .is_finished = 1 };
-      send_message(fd[1], &final_msg);
-
-      close(fd[1]); // סגירת קצה הכתיבה בסיום
-      exit(EXIT_SUCCESS);
+      free(termination_sent);
+      for (int j = 0; j < num_travelers; j++) {
+        free(travelers[j].path);
+      }
+      free(travelers);
+      free_graph(graph);
+      return EXIT_FAILURE;
+    } else if (pid == 0) {
+      run_child_process();
     } else {
-      // -------- parent ----------
-      travelers[i].pid = pid; // שמירת ה-PID של הבן באב
+      travelers[i].pid = pid;
     }
   }
-  close(fd[1]); // האב רק קורא מהצינור, סוגר את קצה הכתיבה של עצמו
 
   // ==========================================
   // 4. Integration of Nave's GUI (Restored Fixes)
@@ -117,6 +114,17 @@ int main(int argc, char *argv[]) {
   SetTraceLogLevel(LOG_WARNING);
   // Open graphical window with expanded dimensions for 15 nodes
   InitWindow(1000, 800, "Traffic Simulation 2026 - Milestone 4");
+  if (!IsWindowReady()) {
+    fprintf(stderr, "Error: Failed to initialize GUI window.\n");
+    for (int i = 0; i < num_travelers; i++) {
+      terminate_and_wait_for_child(&travelers[i].pid, &termination_sent[i]);
+      free(travelers[i].path);
+    }
+    free(termination_sent);
+    free(travelers);
+    free_graph(graph);
+    return EXIT_FAILURE;
+  }
   SetTargetFPS(60);
 
   VisualNode vNodes[MAX_NODES];
@@ -126,7 +134,15 @@ int main(int argc, char *argv[]) {
   Entity *cars = calloc(num_travelers, sizeof(Entity));
   if (cars == NULL) {
     fprintf(stderr, "Error: Failed to allocate memory for entities.\n");
-    exit(EXIT_FAILURE);
+    for (int i = 0; i < num_travelers; i++) {
+      terminate_and_wait_for_child(&travelers[i].pid, &termination_sent[i]);
+      free(travelers[i].path);
+    }
+    free(termination_sent);
+    free(travelers);
+    free_graph(graph);
+    CloseWindow();
+    return EXIT_FAILURE;
   }
   bool animationRunning = false; // Required for PLAY/STOP functionality
 
@@ -147,23 +163,16 @@ int main(int argc, char *argv[]) {
   while (!WindowShouldClose()) {
     // Update all entities using your new function
     if (animationRunning) {
-      // --- קריאת הודעות ה-IPC מהצינור הלא-חוסם ---
-      ipc_message_t msg;
-      while (receive_message(fd[0], &msg) > 0) {
-        // מציאת המטייל המתאים לפי ה-PID ששלח את ההודעה (אם תרצה להוסיף לוגיקה ייעודית)
-        for (int i = 0; i < num_travelers; i++) {
-          if (travelers[i].pid == msg.child_pid) {
-            if (msg.is_finished) {
-               printf("[Parent] Traveler %d finished journey.\n", i);
-            }
-            break;
-          }
-        }
-      }
-
-      // עדכון המיקום החזותי של הרכבים על המסך
       UpdateEntities(cars, num_travelers, graph->num_nodes, vNodes,
                      graph->matrix, travelers);
+
+      for (int i = 0; i < num_travelers; i++) {
+        if (!termination_sent[i] &&
+            cars[i].endNode >= travelers[i].path_length) {
+          terminate_and_wait_for_child(&travelers[i].pid,
+                                       &termination_sent[i]);
+        }
+      }
     }
 
     BeginDrawing();
@@ -186,21 +195,17 @@ int main(int argc, char *argv[]) {
     EndDrawing();
   }
 
-  // שחרור קצה הקריאה של האב לפני סיום
-  close(fd[0]);
   // ==========================================
   // 5. Clean Memory
   // ==========================================
   for (int i = 0; i < num_travelers; i++) {
-    if (travelers[i].pid != 0) {
-      kill(travelers[i].pid, SIGKILL);    // Terminate child process
-      waitpid(travelers[i].pid, NULL, 0); // Wait for child
-    }
+    terminate_and_wait_for_child(&travelers[i].pid, &termination_sent[i]);
 
     if (travelers[i].path != NULL) {
       free(travelers[i].path); // Free path memory
     }
   }
+  free(termination_sent);
   free(travelers); // Free travelers array
   free(cars);      // Free entities array
   free_graph(graph);

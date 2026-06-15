@@ -1,8 +1,7 @@
 #ifndef CHILD_H
 #define CHILD_H
-#include "graph.h"
 
 // The main function that will be executed by each child process
-void run_child_process(Graph *graph, int src, int dest, int write_fd);
+void run_child_process(void);
 
-#endif //CHILD_H
+#endif // CHILD_H
