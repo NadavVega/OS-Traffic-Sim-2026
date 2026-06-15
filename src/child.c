@@ -15,6 +15,17 @@ void run_child_process(Graph *graph, int src, int dest, int write_fd) {
   pid_t pid = getpid();
 
   if (result.total_weight < 0 || result.path_length == 0) {
+    IpcMessage no_path = {
+        .pid = pid,
+        .current_node = src,
+        .next_node = -1,
+        .status = IPC_NO_PATH,
+    };
+    if (ipc_send_message(write_fd, &no_path) == -1) {
+      close(write_fd);
+      exit(EXIT_FAILURE);
+    }
+
     IpcMessage finished = {
         .pid = pid,
         .current_node = src,

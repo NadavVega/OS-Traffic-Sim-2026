@@ -73,6 +73,12 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     entity->finished = true;
     printf("[PID=%d] finished\n", message->pid);
     break;
+  case IPC_NO_PATH:
+    entity->currentNode = travelers[traveler_index].src;
+    entity->nextNode = -1;
+    printf("[PID=%d] No path found from %d to %d\n", message->pid,
+           travelers[traveler_index].src, travelers[traveler_index].dest);
+    break;
   }
   fflush(stdout);
 }
@@ -340,7 +346,7 @@ int main(int argc, char *argv[]) {
     }
     DrawEntities(cars, num_travelers);
     if (simulationCompleted) {
-      DrawCompletionMessage("All travelers reached their destinations");
+      DrawCompletionMessage("Simulation completed");
     }
     EndDrawing();
 
@@ -526,7 +532,7 @@ int main(int argc, char *argv[]) {
     // Draw entities and completion message using your new function
     DrawEntities(cars, num_travelers);
     if (simulationCompleted) {
-      DrawCompletionMessage("All travelers reached their destinations");
+      DrawCompletionMessage("Simulation completed");
     }
     EndDrawing();
   }
