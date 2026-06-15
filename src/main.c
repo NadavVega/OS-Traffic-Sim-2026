@@ -20,6 +20,107 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#if MILESTONE == 5
+static int find_traveler_by_pid(const Traveler travelers[], int num_travelers,
+                                pid_t pid) {
+  for (int i = 0; i < num_travelers; i++) {
+    if (travelers[i].pid == pid) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
+                               Entity entities[], int num_travelers,
+                               const VisualNode nodes[], int num_nodes) {
+  int traveler_index =
+      find_traveler_by_pid(travelers, num_travelers, message->pid);
+  if (traveler_index < 0) {
+    return;
+  }
+
+  Entity *entity = &entities[traveler_index];
+  switch (message->status) {
+  case IPC_EN_ROUTE:
+    if (message->current_node < 0 || message->current_node >= num_nodes ||
+        message->next_node < 0 || message->next_node >= num_nodes) {
+      return;
+    }
+    entity->currentNode = message->current_node;
+    entity->nextNode = message->next_node;
+    entity->currentPos = nodes[message->current_node].pos;
+    printf("[PID=%d] arrived at node %d | next node: %d\n", message->pid,
+           message->current_node, message->next_node);
+    break;
+  case IPC_ARRIVED_DEST:
+    if (message->current_node < 0 || message->current_node >= num_nodes) {
+      return;
+    }
+    entity->currentNode = message->current_node;
+    entity->nextNode = -1;
+    entity->currentPos = nodes[message->current_node].pos;
+    entity->arrived = true;
+    printf("[PID=%d] arrived at node %d | DESTINATION\n", message->pid,
+           message->current_node);
+    break;
+  case IPC_FINISHED:
+    entity->finished = true;
+    printf("[PID=%d] finished\n", message->pid);
+    break;
+  }
+  fflush(stdout);
+}
+
+static void reap_exited_children(const Traveler travelers[], bool child_reaped[],
+                                 int num_travelers) {
+  for (int i = 0; i < num_travelers; i++) {
+    if (travelers[i].pid <= 0 || child_reaped[i]) {
+      continue;
+    }
+
+    pid_t result;
+    do {
+      result = waitpid(travelers[i].pid, NULL, WNOHANG);
+    } while (result == -1 && errno == EINTR);
+
+    if (result == travelers[i].pid || (result == -1 && errno == ECHILD)) {
+      child_reaped[i] = true;
+    } else if (result == -1) {
+      perror("Error: Failed to check child status");
+    }
+  }
+}
+
+static void terminate_and_wait_for_ms5_children(
+    const Traveler travelers[], bool child_reaped[], int num_travelers) {
+  for (int i = 0; i < num_travelers; i++) {
+    if (travelers[i].pid <= 0 || child_reaped[i]) {
+      continue;
+    }
+
+    pid_t result;
+    do {
+      result = waitpid(travelers[i].pid, NULL, WNOHANG);
+    } while (result == -1 && errno == EINTR);
+
+    if (result == 0) {
+      if (kill(travelers[i].pid, SIGTERM) == -1 && errno != ESRCH) {
+        perror("Error: Failed to terminate child");
+      }
+      do {
+        result = waitpid(travelers[i].pid, NULL, 0);
+      } while (result == -1 && errno == EINTR);
+    }
+    if (result == travelers[i].pid || (result == -1 && errno == ECHILD)) {
+      child_reaped[i] = true;
+    } else if (result == -1) {
+      perror("Error: Failed to wait for child");
+    }
+  }
+}
+#endif
+
 #if MILESTONE == 4
 static void terminate_and_wait_for_child(pid_t *pid, bool *termination_sent) {
   if (*pid <= 0) {
@@ -62,8 +163,17 @@ int main(int argc, char *argv[]) {
   }
 
 #if MILESTONE == 5
+  bool *child_reaped = calloc(num_travelers, sizeof(bool));
+  if (child_reaped == NULL) {
+    fprintf(stderr, "Error: Failed to allocate child process state.\n");
+    free(travelers);
+    free_graph(graph);
+    return EXIT_FAILURE;
+  }
+
   int pipe_fd[2];
   if (ipc_create_pipe(pipe_fd) == -1) {
+    free(child_reaped);
     free(travelers);
     free_graph(graph);
     return EXIT_FAILURE;
@@ -76,10 +186,9 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "Error: Failed to fork process for traveler %d\n", i);
       close(pipe_fd[0]);
       close(pipe_fd[1]);
-      for (int j = 0; j < children_started; j++) {
-        kill(travelers[j].pid, SIGTERM);
-        waitpid(travelers[j].pid, NULL, 0);
-      }
+      terminate_and_wait_for_ms5_children(travelers, child_reaped,
+                                          children_started);
+      free(child_reaped);
       free(travelers);
       free_graph(graph);
       return EXIT_FAILURE;
@@ -95,35 +204,91 @@ int main(int argc, char *argv[]) {
   }
 
   close(pipe_fd[1]);
-
-  IpcMessage message;
-  int read_result;
-  while ((read_result = ipc_read_message(pipe_fd[0], &message)) > 0) {
-    // Phase 4 will consume these messages for GUI updates and formatted logs.
+  if (ipc_set_nonblocking(pipe_fd[0]) == -1) {
+    close(pipe_fd[0]);
+    terminate_and_wait_for_ms5_children(travelers, child_reaped,
+                                        num_travelers);
+    free(child_reaped);
+    free(travelers);
+    free_graph(graph);
+    return EXIT_FAILURE;
   }
-  close(pipe_fd[0]);
 
-  int exit_status = read_result == -1 ? EXIT_FAILURE : EXIT_SUCCESS;
+  SetTraceLogLevel(LOG_WARNING);
+  InitWindow(1000, 800, "Traffic Simulation 2026 - Milestone 5");
+  if (!IsWindowReady()) {
+    fprintf(stderr, "Error: Failed to initialize GUI window.\n");
+    close(pipe_fd[0]);
+    terminate_and_wait_for_ms5_children(travelers, child_reaped,
+                                        num_travelers);
+    free(child_reaped);
+    free(travelers);
+    free_graph(graph);
+    return EXIT_FAILURE;
+  }
+  SetTargetFPS(60);
+
+  VisualNode vNodes[MAX_NODES];
+  InitGraphVisuals(graph->num_nodes, vNodes);
+
+  Entity *cars = calloc(num_travelers, sizeof(Entity));
+  if (cars == NULL) {
+    fprintf(stderr, "Error: Failed to allocate memory for entities.\n");
+    close(pipe_fd[0]);
+    terminate_and_wait_for_ms5_children(travelers, child_reaped,
+                                        num_travelers);
+    free(child_reaped);
+    free(travelers);
+    free_graph(graph);
+    CloseWindow();
+    return EXIT_FAILURE;
+  }
+
   for (int i = 0; i < num_travelers; i++) {
-    int child_status = 0;
-    pid_t wait_result;
-    do {
-      wait_result = waitpid(travelers[i].pid, &child_status, 0);
-    } while (wait_result == -1 && errno == EINTR);
-
-    if (wait_result == -1) {
-      perror("Error: Failed to wait for child");
-      exit_status = EXIT_FAILURE;
-      continue;
-    }
-    if (!WIFEXITED(child_status) || WEXITSTATUS(child_status) != EXIT_SUCCESS) {
-      exit_status = EXIT_FAILURE;
-    }
+    cars[i].currentPos = vNodes[travelers[i].src].pos;
+    cars[i].currentNode = travelers[i].src;
+    cars[i].nextNode = -1;
+    cars[i].color = travelers[i].color;
   }
 
+  bool pipe_open = true;
+  while (!WindowShouldClose()) {
+    if (pipe_open) {
+      for (;;) {
+        IpcMessage message;
+        IpcReadResult read_result = ipc_read_message(pipe_fd[0], &message);
+        if (read_result == IPC_READ_MESSAGE) {
+          handle_ipc_message(&message, travelers, cars, num_travelers, vNodes,
+                             graph->num_nodes);
+          continue;
+        }
+        if (read_result == IPC_READ_EOF || read_result == IPC_READ_ERROR) {
+          close(pipe_fd[0]);
+          pipe_open = false;
+        }
+        break;
+      }
+    }
+    reap_exited_children(travelers, child_reaped, num_travelers);
+
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+    DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix);
+    DrawText("Milestone 5: IPC Traffic Animation", 20, 20, 20, DARKGRAY);
+    DrawEntities(cars, num_travelers);
+    EndDrawing();
+  }
+
+  if (pipe_open) {
+    close(pipe_fd[0]);
+  }
+  terminate_and_wait_for_ms5_children(travelers, child_reaped, num_travelers);
+  free(child_reaped);
+  free(cars);
   free(travelers);
   free_graph(graph);
-  return exit_status;
+  CloseWindow();
+  return EXIT_SUCCESS;
 #else
   // ==========================================
   // 2. Claculate path for all travelers

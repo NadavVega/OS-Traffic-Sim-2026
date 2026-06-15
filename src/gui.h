@@ -33,6 +33,10 @@ typedef struct {
   float timer;        // Internal timer to measure jump duration
   bool isWaiting;     // Indicates if the entity is currently waiting at a node
   Color color;        // Unique color for the entity
+  int currentNode;    // Last node reported by the child in milestone 5
+  int nextNode;       // Next node reported by the child in milestone 5
+  bool arrived;       // Whether the destination was reported
+  bool finished;      // Whether the child sent IPC_FINISHED
 } Entity;
 
 // Function to update the movement logic for all entities in the array
