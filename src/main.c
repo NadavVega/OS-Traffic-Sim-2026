@@ -33,7 +33,8 @@ static int find_traveler_by_pid(const Traveler travelers[], int num_travelers,
 
 static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
                                Entity entities[], int num_travelers,
-                               const VisualNode nodes[], int num_nodes) {
+                               const VisualNode nodes[], int num_nodes,
+                               bool update_display) {
   int traveler_index =
       find_traveler_by_pid(travelers, num_travelers, message->pid);
   if (traveler_index < 0) {
@@ -49,7 +50,9 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     }
     entity->currentNode = message->current_node;
     entity->nextNode = message->next_node;
-    entity->currentPos = nodes[message->current_node].pos;
+    if (update_display) {
+      entity->currentPos = nodes[message->current_node].pos;
+    }
     printf("[PID=%d] arrived at node %d | next node: %d\n", message->pid,
            message->current_node, message->next_node);
     break;
@@ -59,7 +62,9 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     }
     entity->currentNode = message->current_node;
     entity->nextNode = -1;
-    entity->currentPos = nodes[message->current_node].pos;
+    if (update_display) {
+      entity->currentPos = nodes[message->current_node].pos;
+    }
     entity->arrived = true;
     printf("[PID=%d] arrived at node %d | DESTINATION\n", message->pid,
            message->current_node);
@@ -70,6 +75,48 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     break;
   }
   fflush(stdout);
+}
+
+static bool all_ms5_children_finished(const Entity entities[],
+                                      const bool child_reaped[],
+                                      int num_travelers) {
+  for (int i = 0; i < num_travelers; i++) {
+    if (!entities[i].finished || !child_reaped[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static void terminate_and_wait_for_ms5_children(
+    const Traveler travelers[], bool child_reaped[], int num_travelers);
+
+static int start_ms5_children(Graph *graph, Traveler travelers[],
+                              int num_travelers, int pipe_fd[2],
+                              bool child_reaped[]) {
+  int children_started = 0;
+  for (int i = 0; i < num_travelers; i++) {
+    pid_t pid = fork();
+    if (pid < 0) {
+      fprintf(stderr, "Error: Failed to fork process for traveler %d\n", i);
+      close(pipe_fd[0]);
+      close(pipe_fd[1]);
+      terminate_and_wait_for_ms5_children(travelers, child_reaped,
+                                          children_started);
+      return -1;
+    }
+    if (pid == 0) {
+      close(pipe_fd[0]);
+      run_child_process(graph, travelers[i].src, travelers[i].dest,
+                        pipe_fd[1]);
+    }
+
+    travelers[i].pid = pid;
+    children_started++;
+  }
+
+  close(pipe_fd[1]);
+  return 0;
 }
 
 static void reap_exited_children(const Traveler travelers[], bool child_reaped[],
@@ -122,6 +169,17 @@ static void terminate_and_wait_for_ms5_children(
 #endif
 
 #if MILESTONE == 4
+static bool all_ms4_children_finished(const Traveler travelers[],
+                                      const bool termination_sent[],
+                                      int num_travelers) {
+  for (int i = 0; i < num_travelers; i++) {
+    if (!termination_sent[i] || travelers[i].pid > 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 static void terminate_and_wait_for_child(pid_t *pid, bool *termination_sent) {
   if (*pid <= 0) {
     return;
@@ -178,36 +236,9 @@ int main(int argc, char *argv[]) {
     free_graph(graph);
     return EXIT_FAILURE;
   }
-
-  int children_started = 0;
-  for (int i = 0; i < num_travelers; i++) {
-    pid_t pid = fork();
-    if (pid < 0) {
-      fprintf(stderr, "Error: Failed to fork process for traveler %d\n", i);
-      close(pipe_fd[0]);
-      close(pipe_fd[1]);
-      terminate_and_wait_for_ms5_children(travelers, child_reaped,
-                                          children_started);
-      free(child_reaped);
-      free(travelers);
-      free_graph(graph);
-      return EXIT_FAILURE;
-    }
-    if (pid == 0) {
-      close(pipe_fd[0]);
-      run_child_process(graph, travelers[i].src, travelers[i].dest,
-                        pipe_fd[1]);
-    }
-
-    travelers[i].pid = pid;
-    children_started++;
-  }
-
-  close(pipe_fd[1]);
   if (ipc_set_nonblocking(pipe_fd[0]) == -1) {
     close(pipe_fd[0]);
-    terminate_and_wait_for_ms5_children(travelers, child_reaped,
-                                        num_travelers);
+    close(pipe_fd[1]);
     free(child_reaped);
     free(travelers);
     free_graph(graph);
@@ -219,8 +250,7 @@ int main(int argc, char *argv[]) {
   if (!IsWindowReady()) {
     fprintf(stderr, "Error: Failed to initialize GUI window.\n");
     close(pipe_fd[0]);
-    terminate_and_wait_for_ms5_children(travelers, child_reaped,
-                                        num_travelers);
+    close(pipe_fd[1]);
     free(child_reaped);
     free(travelers);
     free_graph(graph);
@@ -235,8 +265,7 @@ int main(int argc, char *argv[]) {
   if (cars == NULL) {
     fprintf(stderr, "Error: Failed to allocate memory for entities.\n");
     close(pipe_fd[0]);
-    terminate_and_wait_for_ms5_children(travelers, child_reaped,
-                                        num_travelers);
+    close(pipe_fd[1]);
     free(child_reaped);
     free(travelers);
     free_graph(graph);
@@ -251,15 +280,21 @@ int main(int argc, char *argv[]) {
     cars[i].color = travelers[i].color;
   }
 
+  Rectangle buttonBounds = {20, 100, 120, 40};
+  bool isPlaying = false;
+  bool children_started = false;
   bool pipe_open = true;
-  while (!WindowShouldClose()) {
-    if (pipe_open) {
+  float completion_timer = 0.0f;
+  bool simulation_complete = false;
+
+  while (!WindowShouldClose() && !simulation_complete) {
+    if (children_started && pipe_open) {
       for (;;) {
         IpcMessage message;
         IpcReadResult read_result = ipc_read_message(pipe_fd[0], &message);
         if (read_result == IPC_READ_MESSAGE) {
           handle_ipc_message(&message, travelers, cars, num_travelers, vNodes,
-                             graph->num_nodes);
+                             graph->num_nodes, isPlaying);
           continue;
         }
         if (read_result == IPC_READ_EOF || read_result == IPC_READ_ERROR) {
@@ -269,20 +304,58 @@ int main(int argc, char *argv[]) {
         break;
       }
     }
-    reap_exited_children(travelers, child_reaped, num_travelers);
+    if (children_started) {
+      reap_exited_children(travelers, child_reaped, num_travelers);
+    }
+
+    if (isPlaying) {
+      for (int i = 0; i < num_travelers; i++) {
+        cars[i].currentPos = vNodes[cars[i].currentNode].pos;
+      }
+
+      if (children_started &&
+          all_ms5_children_finished(cars, child_reaped, num_travelers)) {
+        completion_timer += GetFrameTime();
+        if (completion_timer >= 0.75f) {
+          simulation_complete = true;
+        }
+      }
+    }
 
     BeginDrawing();
     ClearBackground(RAYWHITE);
     DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix);
     DrawText("Milestone 5: IPC Traffic Animation", 20, 20, 20, DARKGRAY);
+    if (DrawButton(buttonBounds, isPlaying ? "STOP" : "PLAY", isPlaying)) {
+      isPlaying = !isPlaying;
+    }
     DrawEntities(cars, num_travelers);
     EndDrawing();
+
+    if (isPlaying && !children_started) {
+      if (start_ms5_children(graph, travelers, num_travelers, pipe_fd,
+                             child_reaped) == -1) {
+        pipe_open = false;
+        free(child_reaped);
+        free(cars);
+        free(travelers);
+        free_graph(graph);
+        CloseWindow();
+        return EXIT_FAILURE;
+      }
+      children_started = true;
+    }
   }
 
   if (pipe_open) {
     close(pipe_fd[0]);
   }
-  terminate_and_wait_for_ms5_children(travelers, child_reaped, num_travelers);
+  if (!children_started) {
+    close(pipe_fd[1]);
+  } else {
+    terminate_and_wait_for_ms5_children(travelers, child_reaped,
+                                        num_travelers);
+  }
   free(child_reaped);
   free(cars);
   free(travelers);
@@ -396,9 +469,11 @@ int main(int argc, char *argv[]) {
   }
 
   Rectangle buttonBounds = {20, 100, 120, 40};
+  float completion_timer = 0.0f;
+  bool simulation_complete = false;
 
   // Main game loop
-  while (!WindowShouldClose()) {
+  while (!WindowShouldClose() && !simulation_complete) {
     // Update all entities using your new function
     if (animationRunning) {
       UpdateEntities(cars, num_travelers, graph->num_nodes, vNodes,
@@ -411,6 +486,14 @@ int main(int argc, char *argv[]) {
                                        &termination_sent[i]);
         }
       }
+
+      if (all_ms4_children_finished(travelers, termination_sent,
+                                    num_travelers)) {
+        completion_timer += GetFrameTime();
+        if (completion_timer >= 0.75f) {
+          simulation_complete = true;
+        }
+      }
     }
 
     BeginDrawing();
@@ -420,7 +503,8 @@ int main(int argc, char *argv[]) {
     DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix);
 
     // UI Information (Restored -1 display logic)
-    DrawText("Milestone 5: Integrated Traffic Animation", 20, 20, 20, DARKGRAY);
+    DrawText("Milestone 4: Parent-Controlled Traffic Animation", 20, 20, 20,
+             DARKGRAY);
 
     // Interactive Play/Stop Button
     if (DrawButton(buttonBounds, animationRunning ? "STOP" : "PLAY",

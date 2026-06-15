@@ -6,6 +6,24 @@ signals, inter-process communication (IPC), child cleanup, and a Raylib GUI.
 
 ## Build
 
+Build Milestone 1:
+
+```bash
+make milestone1
+```
+
+Build Milestone 2:
+
+```bash
+make milestone2
+```
+
+Build Milestone 3:
+
+```bash
+make milestone3
+```
+
 Build Milestone 4:
 
 ```bash
@@ -24,12 +42,18 @@ Remove generated executables and object files:
 make clean
 ```
 
-Both milestone targets produce an executable named `sim`.
+Milestone 1 produces `dijkstra`. Milestones 2 through 5 produce `sim`.
 
 ## Run
 
 ```bash
 ./sim <file_name>
+```
+
+Milestone 1 uses:
+
+```bash
+./dijkstra <file_name>
 ```
 
 For example:
@@ -74,6 +98,16 @@ Example:
 Node indexes must be within the graph's valid range. Invalid indexes, malformed
 lines, negative weights, and unsupported graph sizes are rejected safely.
 
+## Milestones 1-3
+
+- Milestone 1 implements Dijkstra shortest-path calculation for a directed,
+  weighted graph stored as an adjacency matrix.
+- Milestone 2 draws the graph with Raylib, including directed edges, nodes, and
+  edge weights.
+- Milestone 3 animates a traveler along its route with edge travel timing and
+  node waits. Its visible Play/Stop button starts, pauses, and resumes the
+  animation. The initial state is paused.
+
 ## Milestone 4
 
 Milestone 4 uses parent-controlled routes and GUI movement:
@@ -83,9 +117,13 @@ Milestone 4 uses parent-controlled routes and GUI movement:
 - The parent forks one child process per traveler.
 - Each child prints `[PID] started` and waits for the parent.
 - The parent controls traveler movement in the GUI.
+- The initial GUI state is paused. Play starts movement, Stop pauses it, and
+  Play resumes it.
 - When a traveler completes its route, the parent sends that child's PID
   `SIGTERM`.
 - The parent waits for and reaps every child before exiting.
+- After all routes complete, the final state is shown briefly and the
+  application closes normally with exit code `0`.
 - If the GUI closes early or cannot initialize, remaining children are
   terminated and reaped.
 
@@ -94,7 +132,8 @@ Milestone 4 uses parent-controlled routes and GUI movement:
 Milestone 5 uses autonomous children and IPC-driven GUI updates:
 
 - The parent parses the graph and traveler definitions.
-- The parent forks one child process per traveler.
+- The parent forks one child process per traveler when Play is pressed for the
+  first time.
 - Children do not print `[PID] started`.
 - Each child calculates its own Dijkstra route using the inherited graph.
 - Each child reports node progress to the parent through a pipe.
@@ -102,7 +141,13 @@ Milestone 5 uses autonomous children and IPC-driven GUI updates:
   the matching GUI entity.
 - MS5 GUI positions change only when IPC node reports arrive; the parent does
   not independently calculate or advance routes.
+- Stop freezes visible GUI positions. The parent continues draining and storing
+  IPC reports so children cannot block on a full pipe. Play applies the latest
+  reported positions and resumes visible updates.
 - The parent waits for and reaps completed children.
+- After every child reports completion and is reaped, the final destination
+  state is shown briefly and the application closes normally with exit code
+  `0`.
 - On GUI close or initialization failure, remaining children are terminated and
   reaped.
 
