@@ -1,6 +1,6 @@
 #include "ipc.h"
 #include <errno.h>
-#include <error.h>
+// #include <error.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>

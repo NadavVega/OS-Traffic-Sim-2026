@@ -56,7 +56,6 @@ int main(int argc, char *argv[]) {
   // ==========================================
   // 3. Create child processes and pipe
   // ==========================================
-
   int fd[2];
   if (init_ipc(fd) == -1) {
     fprintf(stderr, "Error: Failed to initialize IPC.\n");
@@ -73,16 +72,42 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
     } else if (pid == 0) {
       // -------- child ----------
-      printf("[%d] started\n", getpid());
+      close(fd[0]); // הבן רק כותב לצינור, סוגר את קצה הקריאה
+
+      printf("[%d] Traveler %d started simulation\n", getpid(), i);
       fflush(stdout);
-      while (1)
-        pause();          // Simulate ongoing process for animation
-      exit(EXIT_SUCCESS); // Should never reach here!
+
+      // סימולציית התקדמות: הבן עובר על המסלול ושולח עדכונים לאב
+      for (int j = 0; j < travelers[i].path_length - 1; j++) {
+        ipc_message_t msg;
+        msg.child_pid = getpid();
+        msg.current_node = travelers[i].path[j];
+        msg.next_node = travelers[i].path[j + 1];
+        msg.is_finished = 0;
+
+        // שליחת הודעה לאב שהוא מתחיל לזוז בין הצמתים
+        send_message(fd[1], &msg);
+
+        // סימולציה של זמן נסיעה (משקל הקשת כפול 300ms)
+        int weight = graph->matrix[msg.current_node][msg.next_node];
+        usleep(weight * 300000);
+
+        // עצירה של שנייה בצומת (לפי הלוגיקה של נווה)
+        usleep(1000000);
+      }
+
+      // הודעת סיום מהבן
+      ipc_message_t final_msg = { .child_pid = getpid(), .is_finished = 1 };
+      send_message(fd[1], &final_msg);
+
+      close(fd[1]); // סגירת קצה הכתיבה בסיום
+      exit(EXIT_SUCCESS);
     } else {
       // -------- parent ----------
-      travelers[i].pid = pid; // Store child PID for future management
+      travelers[i].pid = pid; // שמירת ה-PID של הבן באב
     }
   }
+  close(fd[1]); // האב רק קורא מהצינור, סוגר את קצה הכתיבה של עצמו
 
   // ==========================================
   // 4. Integration of Nave's GUI (Restored Fixes)
@@ -122,6 +147,21 @@ int main(int argc, char *argv[]) {
   while (!WindowShouldClose()) {
     // Update all entities using your new function
     if (animationRunning) {
+      // --- קריאת הודעות ה-IPC מהצינור הלא-חוסם ---
+      ipc_message_t msg;
+      while (receive_message(fd[0], &msg) > 0) {
+        // מציאת המטייל המתאים לפי ה-PID ששלח את ההודעה (אם תרצה להוסיף לוגיקה ייעודית)
+        for (int i = 0; i < num_travelers; i++) {
+          if (travelers[i].pid == msg.child_pid) {
+            if (msg.is_finished) {
+               printf("[Parent] Traveler %d finished journey.\n", i);
+            }
+            break;
+          }
+        }
+      }
+
+      // עדכון המיקום החזותי של הרכבים על המסך
       UpdateEntities(cars, num_travelers, graph->num_nodes, vNodes,
                      graph->matrix, travelers);
     }
@@ -133,7 +173,7 @@ int main(int argc, char *argv[]) {
     DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix);
 
     // UI Information (Restored -1 display logic)
-    DrawText("Milestone 4: Traffic Animation", 20, 20, 20, DARKGRAY);
+    DrawText("Milestone 5: Integrated Traffic Animation", 20, 20, 20, DARKGRAY);
 
     // Interactive Play/Stop Button
     if (DrawButton(buttonBounds, animationRunning ? "STOP" : "PLAY",
@@ -142,11 +182,12 @@ int main(int argc, char *argv[]) {
     }
 
     // Draw entities and completion message using your new function
-    DrawEntities(
-        cars, num_travelers); // Pass the colors array to the drawing function
+    DrawEntities(cars, num_travelers);
     EndDrawing();
   }
 
+  // שחרור קצה הקריאה של האב לפני סיום
+  close(fd[0]);
   // ==========================================
   // 5. Clean Memory
   // ==========================================
