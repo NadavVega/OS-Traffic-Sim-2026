@@ -39,18 +39,11 @@ make milestone1
 ./dijkstra <file-name>
 ```
 
-### Milestone 2-5
-
-```bash
-make milestone5
-./sim <file-name>
-```
-
-### Milestone 6
+### Milestone 2-6
 
 ```bash
 make milestone6
-./sim tests/inputs/ms6_three_waiting.txt
+./sim <file-name>
 ```
 
 ### Milestone7

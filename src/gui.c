@@ -152,14 +152,80 @@ void UpdateEntities(Entity entities[], int num_travelers, int num_nodes,
     }
   }
 }
+
+static Vector2 GetWaitingPosition(Vector2 nodePos, int travelerIndex) {
+  float angle = travelerIndex * 2.0f * PI / 15.0f;
+  Vector2 offset = {cosf(angle) * 42.0f, sinf(angle) * 42.0f};
+  return Vector2Add(nodePos, offset);
+}
+
+void UpdateIpcEntities(Entity entities[], int num_travelers, int num_nodes,
+                       VisualNode nodes[], int graph[15][15]) {
+  for (int i = 0; i < num_travelers; i++) {
+    Entity *entity = &entities[i];
+
+    if (entity->currentNode < 0 || entity->currentNode >= num_nodes) {
+      continue;
+    }
+
+    if (entity->visualState == ENTITY_VISUAL_WAITING) {
+      entity->currentPos =
+          GetWaitingPosition(nodes[entity->currentNode].pos, i);
+      continue;
+    }
+
+    if (entity->visualState == ENTITY_VISUAL_INSIDE_NODE) {
+      entity->currentPos = nodes[entity->currentNode].pos;
+      continue;
+    }
+
+    if (entity->visualState != ENTITY_VISUAL_MOVING) {
+      continue;
+    }
+
+    if (entity->nextNode < 0 || entity->nextNode >= num_nodes) {
+      entity->currentPos = nodes[entity->currentNode].pos;
+      entity->visualState = ENTITY_VISUAL_IDLE;
+      continue;
+    }
+
+    int startNode = entity->currentNode;
+    int endNode = entity->nextNode;
+    entity->timer += GetFrameTime();
+    float duration = entity->movementDuration;
+    if (duration <= 0.0f) {
+      int weight = graph[startNode][endNode];
+      duration = weight > 0 ? weight * 0.3f : 0.5f;
+    }
+    float progress = entity->timer / duration;
+    if (progress >= 1.0f) {
+      progress = 1.0f;
+      entity->visualState = ENTITY_VISUAL_IDLE;
+    }
+
+    entity->currentPos =
+        Vector2Lerp(nodes[startNode].pos, nodes[endNode].pos, progress);
+    if (progress >= 1.0f) {
+      entity->currentNode = endNode;
+    }
+  }
+}
+
 // Draw all moving entities from the array (Stage 2 - Multi-traveler)
 void DrawEntities(Entity entities[], int num_travelers) {
   // Loop and draw each traveler as a golden circle
   for (int i = 0; i < num_travelers; i++) {
+    Color outline = BLACK;
+    if (entities[i].visualState == ENTITY_VISUAL_WAITING) {
+      outline = ORANGE;
+    } else if (entities[i].visualState == ENTITY_VISUAL_INSIDE_NODE) {
+      outline = GREEN;
+    }
+
     DrawCircleV(
         entities[i].currentPos, 12,
         entities[i].color); // Use the unique color assigned to each traveler
     DrawCircleLines(entities[i].currentPos.x, entities[i].currentPos.y, 12,
-                    BLACK);
+                    outline);
   }
 }

@@ -37,7 +37,7 @@ static int find_traveler_by_pid(const Traveler travelers[], int num_travelers,
 static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
                                Entity entities[], int num_travelers,
                                const VisualNode nodes[], int num_nodes,
-                               bool update_display) {
+                               int graph[15][15], bool update_display) {
   int traveler_index =
       find_traveler_by_pid(travelers, num_travelers, message->pid);
   if (traveler_index < 0) {
@@ -53,6 +53,10 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     }
     entity->currentNode = message->current_node;
     entity->nextNode = message->next_node;
+    entity->visualState = ENTITY_VISUAL_MOVING;
+    entity->timer = 0.0f;
+    int weight = graph[message->current_node][message->next_node];
+    entity->movementDuration = weight > 0 ? weight * 0.3f : 0.5f;
     if (update_display) {
       entity->currentPos = nodes[message->current_node].pos;
     }
@@ -65,6 +69,9 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     }
     entity->currentNode = message->current_node;
     entity->nextNode = -1;
+    entity->visualState = ENTITY_VISUAL_IDLE;
+    entity->timer = 0.0f;
+    entity->movementDuration = 0.0f;
     if (update_display) {
       entity->currentPos = nodes[message->current_node].pos;
     }
@@ -79,14 +86,36 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
   case IPC_NO_PATH:
     entity->currentNode = travelers[traveler_index].src;
     entity->nextNode = -1;
+    entity->visualState = ENTITY_VISUAL_IDLE;
+    entity->timer = 0.0f;
+    entity->movementDuration = 0.0f;
     printf("[PID=%d] No path found from %d to %d\n", message->pid,
            travelers[traveler_index].src, travelers[traveler_index].dest);
     break;
   case IPC_WAITING_LOCK:
+    if (message->current_node < 0 || message->current_node >= num_nodes) {
+      return;
+    }
+    entity->currentNode = message->current_node;
+    entity->nextNode = message->next_node;
+    entity->visualState = ENTITY_VISUAL_WAITING;
+    entity->timer = 0.0f;
+    entity->movementDuration = 0.0f;
     printf("[PID=%d] waiting for node %d\n", message->pid,
            message->current_node);
     break;
   case IPC_INSIDE_NODE:
+    if (message->current_node < 0 || message->current_node >= num_nodes) {
+      return;
+    }
+    entity->currentNode = message->current_node;
+    entity->nextNode = message->next_node;
+    entity->visualState = ENTITY_VISUAL_INSIDE_NODE;
+    entity->timer = 0.0f;
+    entity->movementDuration = 0.0f;
+    if (update_display) {
+      entity->currentPos = nodes[message->current_node].pos;
+    }
     printf("[PID=%d] entered node %d\n", message->pid,
            message->current_node);
     break;
@@ -340,7 +369,7 @@ int main(int argc, char *argv[]) {
         IpcReadResult read_result = ipc_read_message(pipe_fd[0], &message);
         if (read_result == IPC_READ_MESSAGE) {
           handle_ipc_message(&message, travelers, cars, num_travelers, vNodes,
-                             graph->num_nodes, isPlaying);
+                             graph->num_nodes, graph->matrix, isPlaying);
           continue;
         }
         if (read_result == IPC_READ_EOF || read_result == IPC_READ_ERROR) {
@@ -355,9 +384,8 @@ int main(int argc, char *argv[]) {
     }
 
     if (!simulationCompleted && isPlaying) {
-      for (int i = 0; i < num_travelers; i++) {
-        cars[i].currentPos = vNodes[cars[i].currentNode].pos;
-      }
+      UpdateIpcEntities(cars, num_travelers, graph->num_nodes, vNodes,
+                        graph->matrix);
 
       if (children_started &&
           all_ms5_children_finished(cars, child_reaped, num_travelers)) {
