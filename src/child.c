@@ -3,6 +3,9 @@
 #include "dijkstra.h"
 #include "ipc.h"
 #endif
+#if MILESTONE >= 6
+#include "node_locks.h"
+#endif
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +16,6 @@ void run_child_process(Graph *graph, int src, int dest, int write_fd) {
 #elif MILESTONE >= 6
 void run_child_process(Graph *graph, int src, int dest, int write_fd,
                        int semaphore_id) {
-  (void)semaphore_id;
 #endif
 #if MILESTONE >= 5
   dijkstraResult result = find_shortest_path(graph->num_nodes, graph->matrix, src, dest);
@@ -37,6 +39,30 @@ void run_child_process(Graph *graph, int src, int dest, int write_fd,
     bool at_destination = (i == result.path_length - 1);
     int current = result.path[i];
     int next = at_destination ? -1 : result.path[i + 1];
+
+#if MILESTONE >= 6
+    IpcMessage waiting_msg = { .pid = pid, .current_node = current, .next_node = next, .status = IPC_WAITING_LOCK };
+    if (ipc_send_message(write_fd, &waiting_msg) == -1) { close(write_fd); exit(EXIT_FAILURE); }
+
+    if (node_locks_lock(semaphore_id, current) == -1) {
+      close(write_fd);
+      exit(EXIT_FAILURE);
+    }
+
+    IpcMessage inside_msg = { .pid = pid, .current_node = current, .next_node = next, .status = IPC_INSIDE_NODE };
+    if (ipc_send_message(write_fd, &inside_msg) == -1) {
+      node_locks_unlock(semaphore_id, current);
+      close(write_fd);
+      exit(EXIT_FAILURE);
+    }
+
+    sleep(1);
+
+    if (node_locks_unlock(semaphore_id, current) == -1) {
+      close(write_fd);
+      exit(EXIT_FAILURE);
+    }
+#endif
 
     IpcMessage movement_msg = { .pid = pid, .current_node = current, .next_node = next, .status = at_destination ? IPC_ARRIVED_DEST : IPC_EN_ROUTE };
     if (ipc_send_message(write_fd, &movement_msg) == -1) { close(write_fd); exit(EXIT_FAILURE); }
