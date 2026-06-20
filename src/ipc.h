@@ -7,7 +7,9 @@ typedef enum {
   IPC_EN_ROUTE = 0,
   IPC_ARRIVED_DEST = 1,
   IPC_FINISHED = 2,
-  IPC_NO_PATH = 3
+  IPC_NO_PATH = 3,
+  IPC_WAITING_LOCK = 4, // New state for Milestone 6
+  IPC_INSIDE_NODE = 5   // New state for Milestone 6
 } IpcStatus;
 
 typedef struct {
