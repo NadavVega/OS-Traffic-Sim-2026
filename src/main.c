@@ -6,8 +6,11 @@
 #include "dijkstra.h"
 #include "graph.h"
 #include "gui.h" // Nave's functions
-#if MILESTONE == 5
+#if MILESTONE >= 5
 #include "ipc.h"
+#endif
+#if MILESTONE >= 6
+#include "node_locks.h"
 #endif
 #include "parser.h"
 #include "raylib.h" // Graphics library
@@ -20,7 +23,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#if MILESTONE == 5
+#if MILESTONE >= 5
 static int find_traveler_by_pid(const Traveler travelers[], int num_travelers,
                                 pid_t pid) {
   for (int i = 0; i < num_travelers; i++) {
@@ -79,6 +82,14 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     printf("[PID=%d] No path found from %d to %d\n", message->pid,
            travelers[traveler_index].src, travelers[traveler_index].dest);
     break;
+  case IPC_WAITING_LOCK:
+    printf("[PID=%d] waiting for node %d\n", message->pid,
+           message->current_node);
+    break;
+  case IPC_INSIDE_NODE:
+    printf("[PID=%d] entered node %d\n", message->pid,
+           message->current_node);
+    break;
   }
   fflush(stdout);
 }
@@ -99,7 +110,12 @@ static void terminate_and_wait_for_ms5_children(
 
 static int start_ms5_children(Graph *graph, Traveler travelers[],
                               int num_travelers, int pipe_fd[2],
-                              bool child_reaped[]) {
+                              bool child_reaped[]
+#if MILESTONE >= 6
+                              ,
+                              int semaphore_id
+#endif
+) {
   int children_started = 0;
   for (int i = 0; i < num_travelers; i++) {
     pid_t pid = fork();
@@ -113,8 +129,13 @@ static int start_ms5_children(Graph *graph, Traveler travelers[],
     }
     if (pid == 0) {
       close(pipe_fd[0]);
+#if MILESTONE >= 6
+      run_child_process(graph, travelers[i].src, travelers[i].dest, pipe_fd[1],
+                        semaphore_id);
+#else
       run_child_process(graph, travelers[i].src, travelers[i].dest,
                         pipe_fd[1]);
+#endif
     }
 
     travelers[i].pid = pid;
@@ -226,7 +247,7 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-#if MILESTONE == 5
+#if MILESTONE >= 5
   bool *child_reaped = calloc(num_travelers, sizeof(bool));
   if (child_reaped == NULL) {
     fprintf(stderr, "Error: Failed to allocate child process state.\n");
@@ -251,12 +272,28 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
+#if MILESTONE >= 6
+  int semaphore_id = node_locks_create(graph->num_nodes);
+  if (semaphore_id == -1) {
+    close(pipe_fd[0]);
+    close(pipe_fd[1]);
+    free(child_reaped);
+    free(travelers);
+    free_graph(graph);
+    return EXIT_FAILURE;
+  }
+  bool node_locks_destroyed = false;
+#endif
+
   SetTraceLogLevel(LOG_WARNING);
   InitWindow(1000, 800, "Traffic Simulation 2026 - Milestone 5");
   if (!IsWindowReady()) {
     fprintf(stderr, "Error: Failed to initialize GUI window.\n");
     close(pipe_fd[0]);
     close(pipe_fd[1]);
+#if MILESTONE >= 6
+    node_locks_destroy(semaphore_id);
+#endif
     free(child_reaped);
     free(travelers);
     free_graph(graph);
@@ -272,6 +309,9 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Error: Failed to allocate memory for entities.\n");
     close(pipe_fd[0]);
     close(pipe_fd[1]);
+#if MILESTONE >= 6
+    node_locks_destroy(semaphore_id);
+#endif
     free(child_reaped);
     free(travelers);
     free_graph(graph);
@@ -330,6 +370,12 @@ int main(int argc, char *argv[]) {
           }
           terminate_and_wait_for_ms5_children(travelers, child_reaped,
                                               num_travelers);
+#if MILESTONE >= 6
+          if (!node_locks_destroyed) {
+            node_locks_destroy(semaphore_id);
+            node_locks_destroyed = true;
+          }
+#endif
           completionCleanupDone = true;
         }
       }
@@ -352,8 +398,16 @@ int main(int argc, char *argv[]) {
 
     if (!simulationCompleted && isPlaying && !children_started) {
       if (start_ms5_children(graph, travelers, num_travelers, pipe_fd,
-                             child_reaped) == -1) {
+                             child_reaped
+#if MILESTONE >= 6
+                             ,
+                             semaphore_id
+#endif
+                             ) == -1) {
         pipe_open = false;
+#if MILESTONE >= 6
+        node_locks_destroy(semaphore_id);
+#endif
         free(child_reaped);
         free(cars);
         free(travelers);
@@ -374,6 +428,11 @@ int main(int argc, char *argv[]) {
     terminate_and_wait_for_ms5_children(travelers, child_reaped,
                                         num_travelers);
   }
+#if MILESTONE >= 6
+  if (!node_locks_destroyed) {
+    node_locks_destroy(semaphore_id);
+  }
+#endif
   free(child_reaped);
   free(cars);
   free(travelers);
