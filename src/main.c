@@ -79,6 +79,14 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     printf("[PID=%d] No path found from %d to %d\n", message->pid,
            travelers[traveler_index].src, travelers[traveler_index].dest);
     break;
+  case IPC_WAITING_LOCK:
+    printf("[PID=%d] waiting for node %d\n", message->pid,
+           message->current_node);
+    break;
+  case IPC_INSIDE_NODE:
+    printf("[PID=%d] entered node %d\n", message->pid,
+           message->current_node);
+    break;
   }
   fflush(stdout);
 }
