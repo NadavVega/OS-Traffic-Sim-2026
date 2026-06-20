@@ -1,0 +1,21 @@
+# ninja log v6
+12617	12866	8002903512615652	C:/Users/balah/Desktop/OS Project/OS-Traffic-Sim-2026/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-test	cb6f2df06cce55d7
+3	264	8002903386591353	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-mkdir	7c644a07bc95e2a0
+11613	11963	8002903503300808	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-configure	793307838526ec1
+11298	11612	8002903500010544	C:/Users/balah/Desktop/OS Project/OS-Traffic-Sim-2026/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-patch	8ee41fc73117fa69
+3	264	8002903386591353	C:/Users/balah/Desktop/OS Project/OS-Traffic-Sim-2026/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-mkdir	7c644a07bc95e2a0
+267	10973	8002903493532907	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-download	d2b2acee6e611312
+10976	11297	8002903496658670	C:/Users/balah/Desktop/OS Project/OS-Traffic-Sim-2026/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-update	5e4f1dfd9e51650
+11298	11612	8002903500010544	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-patch	8ee41fc73117fa69
+267	10973	8002903493532907	C:/Users/balah/Desktop/OS Project/OS-Traffic-Sim-2026/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-download	d2b2acee6e611312
+12867	13348	8002903517292118	C:/Users/balah/Desktop/OS Project/OS-Traffic-Sim-2026/cmake-build-debug/_deps/raylib-subbuild/CMakeFiles/raylib-populate-complete	ae4197c9cc208c85
+10976	11297	8002903496658670	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-update	5e4f1dfd9e51650
+11613	11963	8002903503300808	C:/Users/balah/Desktop/OS Project/OS-Traffic-Sim-2026/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-configure	793307838526ec1
+11964	12301	8002903506931877	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-build	844dccd6393b43eb
+11964	12301	8002903506931877	C:/Users/balah/Desktop/OS Project/OS-Traffic-Sim-2026/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-build	844dccd6393b43eb
+12867	13348	8002903517292118	C:/Users/balah/Desktop/OS Project/OS-Traffic-Sim-2026/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-done	ae4197c9cc208c85
+12302	12616	8002903510092370	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-install	9f9f4349be4cd4d3
+12302	12616	8002903510092370	C:/Users/balah/Desktop/OS Project/OS-Traffic-Sim-2026/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-install	9f9f4349be4cd4d3
+12617	12866	8002903512615652	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-test	cb6f2df06cce55d7
+12867	13348	8002903517292118	CMakeFiles/raylib-populate-complete	ae4197c9cc208c85
+12867	13348	8002903517292118	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-done	ae4197c9cc208c85
