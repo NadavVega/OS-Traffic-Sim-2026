@@ -12,6 +12,13 @@ typedef struct {
   int id;      // Node ID (0 to 14)
 } VisualNode;
 
+typedef enum {
+  ENTITY_VISUAL_IDLE = 0,
+  ENTITY_VISUAL_WAITING,
+  ENTITY_VISUAL_INSIDE_NODE,
+  ENTITY_VISUAL_MOVING
+} EntityVisualState;
+
 // Predefined colors for up to 15 travelers (Stage 4 - Unique Colors)
 extern const Color travelerColors[15];
 
@@ -40,12 +47,18 @@ typedef struct {
   int nextNode;       // Next node reported by the child in milestone 5
   bool arrived;       // Whether the destination was reported
   bool finished;      // Whether the child sent IPC_FINISHED
+  EntityVisualState visualState;
+  float movementDuration;
 } Entity;
 
 // Function to update the movement logic for all entities in the array
 void UpdateEntities(Entity entities[], int num_travelers, int num_nodes,
                     VisualNode nodes[], int graph[15][15],
                     Traveler travelers[]);
+
+// Updates IPC-driven traveler animation for milestones 5 and 6.
+void UpdateIpcEntities(Entity entities[], int num_travelers, int num_nodes,
+                       VisualNode nodes[], int graph[15][15]);
 
 // Function to render all entities from the array on the screen
 void DrawEntities(Entity entities[], int num_travelers);
