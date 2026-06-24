@@ -6,11 +6,13 @@
 #include <sys/sem.h>
 #include <sys/types.h>
 
+#ifndef __APPLE__
 union semun {
   int val;
   struct semid_ds *buf;
   unsigned short *array;
 };
+#endif
 
 static int node_locks_validate_index(int node_index) {
   if (node_index < 0) {

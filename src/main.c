@@ -1,7 +1,8 @@
 #ifndef MILESTONE
 #define MILESTONE 4
 #endif
-
+#include <string.h>
+#include <stdlib.h>
 #include "child.h"
 #include "dijkstra.h"
 #include "graph.h"
@@ -337,24 +338,21 @@ static void terminate_and_wait_for_child(pid_t *pid, bool *termination_sent) {
   *pid = 0;
 }
 #endif
-
 int main(int argc, char *argv[]) {
-  // ==========================================
-  // 1. Data Parsing and Validation (Bar's Logic)
-  // ==========================================
-  if (argc != 2 && argc != 3) {
-    fprintf(stderr, "Usage: %s [scheduler] <file_name>\n", argv[0]);
+  // Update argument check to support scheduler option
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <file_name> [fcfs|sjf]\n", argv[0]);
     return EXIT_FAILURE;
   }
 
-  char *scheduler_type = "fcfs";
-  char *filename = NULL;
-
-  if (argc == 3) {
-    scheduler_type = argv[1];
-    filename = argv[2];
-  } else {
-    filename = argv[1];
+  // Parse and determine the active scheduler algorithm
+  const char *scheduler_name = "FCFS";
+  if (argc >= 3) {
+      if (strcmp(argv[2], "sjf") == 0 || strcmp(argv[2], "SJF") == 0) {
+          scheduler_name = "SJF";
+      } else {
+          scheduler_name = "FCFS";
+      }
   }
 
   Traveler *travelers = NULL;
@@ -734,13 +732,12 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    BeginDrawing();
+BeginDrawing();
     ClearBackground(RAYWHITE);
 
-    // Draw background graph
-    DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix);
+    // Pass the scheduler name to the drawing function for Milestone 4 fallback
+    DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix, scheduler_name);
 
-    // UI Information (Restored -1 display logic)
     DrawText("Milestone 4: Parent-Controlled Traffic Animation", 20, 20, 20,
              DARKGRAY);
 
