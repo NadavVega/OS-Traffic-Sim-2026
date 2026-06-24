@@ -1,8 +1,8 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include "gui.h"
 #include "raymath.h"
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 // Predefined colors for up to 15 travelers (Stage 4 - Unique Colors)
 const Color travelerColors[15] = {RED,    ORANGE,  YELLOW, GREEN, BLUE,
                                   PURPLE, PINK,    BROWN,  GRAY,  MAROON,
@@ -23,16 +23,46 @@ void InitGraphVisuals(int num_nodes, VisualNode nodes[]) {
   }
 }
 
-// Drawing the static graph: edges, arrows, and weights (Stage 2)
-void DrawStaticGraph(int num_nodes, VisualNode nodes[], int graph[15][15], const char* scheduler_name) {
-  // ... Keep all your existing loop code that draws edges, arrows, and weights exactly the same ...
+// Drawing the static graph: edges, arrows, and weights
+void DrawStaticGraph(int num_nodes, VisualNode nodes[], int graph[15][15],
+                     const char *scheduler_name) {
+  (void)scheduler_name; // main.c draws the scheduler text, not this function
 
-  // Display the active scheduling algorithm if provided
-  if (scheduler_name != NULL) {
-      DrawText(TextFormat("Scheduler: %s", scheduler_name), 20, 50, 18, DARKGRAY);
+  // Draw edges, arrows, and weights
+  for (int i = 0; i < num_nodes; i++) {
+    for (int j = 0; j < num_nodes; j++) {
+      if (graph[i][j] > 0) {
+        DrawLineEx(nodes[i].pos, nodes[j].pos, 2.0f, DARKGRAY);
+
+        Vector2 direction = Vector2Subtract(nodes[j].pos, nodes[i].pos);
+        float angle = atan2f(direction.y, direction.x);
+
+        Vector2 arrowPoint = Vector2Subtract(
+            nodes[j].pos, Vector2Scale(Vector2Normalize(direction), 35));
+
+        DrawPoly(arrowPoint, 3, 12, angle * RAD2DEG, DARKGRAY);
+
+        Vector2 mid = {(nodes[i].pos.x + nodes[j].pos.x) / 2,
+                       (nodes[i].pos.y + nodes[j].pos.y) / 2};
+
+        const char *weightText = TextFormat("%d", graph[i][j]);
+        int fontSize = 20;
+        int textWidth = MeasureText(weightText, fontSize);
+
+        DrawCircleV(mid, 13, RAYWHITE);
+        DrawText(weightText, mid.x - textWidth / 2, mid.y - fontSize / 2,
+                 fontSize, RED);
+      }
+    }
   }
 
-  // ... Keep all your existing loop code that draws the nodes (MAROON circles) exactly the same ...
+  // Draw nodes
+  for (int i = 0; i < num_nodes; i++) {
+    DrawCircleV(nodes[i].pos, 25, MAROON);
+    DrawCircleLines(nodes[i].pos.x, nodes[i].pos.y, 25, BLACK);
+    DrawText(TextFormat("%d", i), nodes[i].pos.x - 5, nodes[i].pos.y - 8, 20,
+             WHITE);
+  }
 }
 
 // Interactive Play/Stop button implementation (Stage 3)

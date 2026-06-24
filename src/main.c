@@ -13,6 +13,9 @@
 #if MILESTONE == 6
 #include "node_locks.h"
 #endif
+#if MILESTONE >= 7
+#include "scheduler.h"
+#endif
 #include "parser.h"
 #include "raylib.h" // Graphics library
 #include <errno.h>
@@ -35,14 +38,40 @@ static int find_traveler_by_pid(const Traveler travelers[], int num_travelers,
   return -1;
 }
 
+#if MILESTONE >= 7
+static int grant_next_waiting_traveler(SchedulerState *scheduler, int node,
+                                       int grant_write_fds[],
+                                       const Traveler travelers[]) {
+  SchedulerItem selected;
+  int result = scheduler_choose_next(scheduler, node, &selected);
+  if (result <= 0) {
+    return result;
+  }
+
+  if (scheduler_mark_node_busy(scheduler, node) == -1) {
+    return -1;
+  }
+
+  IpcMessage grant = {.status = IPC_GRANTED_NODE};
+  if (ipc_send_message(grant_write_fds[selected.traveler_index], &grant) == -1) {
+    scheduler_mark_node_free(scheduler, node);
+    return -1;
+  }
+
+  printf("  -> Scheduler granted node %d to PID %d\n", node,
+         travelers[selected.traveler_index].pid);
+  return 1;
+}
+#endif
+
 static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
                                Entity entities[], int num_travelers,
                                const VisualNode nodes[], int num_nodes,
                                int graph[15][15], bool update_display
 #if MILESTONE >= 7
-                               , int grant_write_fds[], int node_queues[MAX_NODES][MAX_NODES],
-                               int queue_sizes[MAX_NODES], bool node_busy[MAX_NODES],
-                               const char* scheduler_type
+                               ,
+                               int grant_write_fds[],
+                               SchedulerState *scheduler
 #endif
                                ) {
   int traveler_index =
@@ -129,7 +158,9 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
 
 #if MILESTONE >= 7
   case IPC_REQUEST_NODE: {
-    if (message->current_node < 0 || message->current_node >= num_nodes) return;
+    if (message->current_node < 0 || message->current_node >= num_nodes) {
+      return;
+    }
     entity->currentNode = message->current_node;
     entity->nextNode = message->next_node;
     entity->visualState = ENTITY_VISUAL_WAITING;
@@ -137,57 +168,48 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     entity->movementDuration = 0.0f;
 
     int node = message->current_node;
-    node_queues[node][queue_sizes[node]++] = traveler_index;
+    int job_length = 0;
+    if (message->next_node >= 0 && message->next_node < num_nodes) {
+      job_length = graph[node][message->next_node];
+    }
+    if (job_length < 0) {
+      job_length = 0;
+    }
 
-    printf("[PID=%d] requested node %d (Queue size: %d)\n", message->pid, node, queue_sizes[node]);
+    if (scheduler_add_waiting(scheduler, node, traveler_index, message->pid,
+                              message->next_node, job_length) == -1) {
+      fprintf(stderr, "Error: Failed to queue PID %d for node %d\n",
+              message->pid, node);
+      return;
+    }
 
-    // If node is free, grant permission to the first in queue (FCFS)
-    if (!node_busy[node]) {
-        node_busy[node] = true;
-        int next_traveler = node_queues[node][0];
+    printf("[PID=%d] requested node %d (next edge weight: %d)\n",
+           message->pid, node, job_length);
 
-        // Shift queue forward
-        queue_sizes[node]--;
-        for(int i = 0; i < queue_sizes[node]; i++) {
-            node_queues[node][i] = node_queues[node][i+1];
-        }
-
-        IpcMessage grant = { .status = IPC_GRANTED_NODE };
-        write(grant_write_fds[next_traveler], &grant, sizeof(grant));
-        printf("  -> Scheduler (%s) granted node %d to PID %d\n", scheduler_type, node, travelers[next_traveler].pid);
+    if (!scheduler_is_node_busy(scheduler, node)) {
+      grant_next_waiting_traveler(scheduler, node, grant_write_fds, travelers);
     }
     break;
   }
   case IPC_LEFT_NODE: {
-    if (message->current_node < 0 || message->current_node >= num_nodes) return;
-    int left_node = message->current_node;
-    node_busy[left_node] = false;
-    printf("[PID=%d] left node %d\n", message->pid, left_node);
-
-    if (queue_sizes[left_node] > 0) {
-        node_busy[left_node] = true;
-
-        // ==========================================
-        // TODO: SJF SCHEDULING LOGIC HERE
-        // If strcmp(scheduler_type, "sjf") == 0, sort the node_queues[left_node]
-        // array here based on shortest remaining path or weight before picking index 0!
-        // ==========================================
-
-        int next_traveler = node_queues[left_node][0];
-
-        // Shift queue forward
-        queue_sizes[left_node]--;
-        for(int i = 0; i < queue_sizes[left_node]; i++) {
-            node_queues[left_node][i] = node_queues[left_node][i+1];
-        }
-
-        IpcMessage grant = { .status = IPC_GRANTED_NODE };
-        write(grant_write_fds[next_traveler], &grant, sizeof(grant));
-        printf("  -> Scheduler (%s) granted node %d to PID %d\n", scheduler_type, left_node, travelers[next_traveler].pid);
+    if (message->current_node < 0 || message->current_node >= num_nodes) {
+      return;
     }
+    int left_node = message->current_node;
+    scheduler_mark_node_free(scheduler, left_node);
+    printf("[PID=%d] left node %d\n", message->pid, left_node);
+    grant_next_waiting_traveler(scheduler, left_node, grant_write_fds,
+                                travelers);
     break;
   }
 #endif
+#if MILESTONE < 7
+  case IPC_REQUEST_NODE:
+  case IPC_LEFT_NODE:
+    break;
+#endif
+  case IPC_GRANTED_NODE:
+    break;
   }
   fflush(stdout);
 }
@@ -339,25 +361,33 @@ static void terminate_and_wait_for_child(pid_t *pid, bool *termination_sent) {
 }
 #endif
 int main(int argc, char *argv[]) {
-  // Update argument check to support scheduler option
-  if (argc < 2) {
-    fprintf(stderr, "Usage: %s <file_name> [fcfs|sjf]\n", argv[0]);
-    return EXIT_FAILURE;
-  }
+  const char *input_filename = NULL;
+  const char *scheduler_name = "fcfs";
+#if MILESTONE >= 7
+  SchedulerAlgorithm scheduler_algorithm = SCHEDULER_FCFS;
+#endif
 
-  // Parse and determine the active scheduler algorithm
-  const char *scheduler_name = "FCFS";
-  if (argc >= 3) {
-      if (strcmp(argv[2], "sjf") == 0 || strcmp(argv[2], "SJF") == 0) {
-          scheduler_name = "SJF";
-      } else {
-          scheduler_name = "FCFS";
-      }
+  if (argc == 2) {
+    input_filename = argv[1];
+  } else if (argc == 4 && strcmp(argv[1], "-schd") == 0) {
+    input_filename = argv[3];
+#if MILESTONE >= 7
+    if (scheduler_parse_algorithm(argv[2], &scheduler_algorithm) == -1) {
+      fprintf(stderr, "Usage: %s [-schd fcfs|sjf] <file_name>\n", argv[0]);
+      return EXIT_FAILURE;
+    }
+    scheduler_name = scheduler_algorithm_name(scheduler_algorithm);
+#else
+    scheduler_name = argv[2];
+#endif
+  } else {
+    fprintf(stderr, "Usage: %s [-schd fcfs|sjf] <file_name>\n", argv[0]);
+    return EXIT_FAILURE;
   }
 
   Traveler *travelers = NULL;
   int num_travelers = 0;
-  Graph *graph = parse_graph_from_file(filename, &travelers, &num_travelers);
+  Graph *graph = parse_graph_from_file(input_filename, &travelers, &num_travelers);
 
   if (graph == NULL || travelers == NULL || num_travelers <= 0) {
     fprintf(stderr, "Error: Invalid input or negative weights detected.\n");
@@ -373,8 +403,22 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
+#if MILESTONE >= 7
+  SchedulerState *scheduler =
+      scheduler_create(graph->num_nodes, scheduler_algorithm);
+  if (scheduler == NULL) {
+    free(child_reaped);
+    free(travelers);
+    free_graph(graph);
+    return EXIT_FAILURE;
+  }
+#endif
+
   int pipe_fd[2];
   if (ipc_create_pipe(pipe_fd) == -1) {
+#if MILESTONE >= 7
+    scheduler_destroy(scheduler);
+#endif
     free(child_reaped);
     free(travelers);
     free_graph(graph);
@@ -383,6 +427,9 @@ int main(int argc, char *argv[]) {
   if (ipc_set_nonblocking(pipe_fd[0]) == -1) {
     close(pipe_fd[0]);
     close(pipe_fd[1]);
+#if MILESTONE >= 7
+    scheduler_destroy(scheduler);
+#endif
     free(child_reaped);
     free(travelers);
     free_graph(graph);
@@ -408,14 +455,20 @@ int main(int argc, char *argv[]) {
   for (int i = 0; i < num_travelers; i++) {
     if (pipe(grant_pipes[i]) == -1) {
       perror("Error: Failed to create grant pipes");
-      // Memory cleanup handled in standard exit logic if needed
+      for (int j = 0; j < i; j++) {
+        close(grant_pipes[j][0]);
+        close(grant_pipes[j][1]);
+      }
+      close(pipe_fd[0]);
+      close(pipe_fd[1]);
+      scheduler_destroy(scheduler);
+      free(child_reaped);
+      free(travelers);
+      free_graph(graph);
       return EXIT_FAILURE;
     }
     grant_write_fds[i] = grant_pipes[i][1];
   }
-  int node_queues[MAX_NODES][MAX_NODES];
-  int queue_sizes[MAX_NODES] = {0};
-  bool node_busy[MAX_NODES] = {false};
 #endif
 
   SetTraceLogLevel(LOG_WARNING);
@@ -426,6 +479,13 @@ int main(int argc, char *argv[]) {
     close(pipe_fd[1]);
 #if MILESTONE == 6
     node_locks_destroy(semaphore_id);
+#endif
+#if MILESTONE >= 7
+    for (int i = 0; i < num_travelers; i++) {
+      close(grant_pipes[i][0]);
+      close(grant_pipes[i][1]);
+    }
+    scheduler_destroy(scheduler);
 #endif
     free(child_reaped);
     free(travelers);
@@ -444,6 +504,13 @@ int main(int argc, char *argv[]) {
     close(pipe_fd[1]);
 #if MILESTONE == 6
     node_locks_destroy(semaphore_id);
+#endif
+#if MILESTONE >= 7
+    for (int i = 0; i < num_travelers; i++) {
+      close(grant_pipes[i][0]);
+      close(grant_pipes[i][1]);
+    }
+    scheduler_destroy(scheduler);
 #endif
     free(child_reaped);
     free(travelers);
@@ -475,7 +542,8 @@ int main(int argc, char *argv[]) {
           handle_ipc_message(&message, travelers, cars, num_travelers, vNodes,
                              graph->num_nodes, graph->matrix, isPlaying
 #if MILESTONE >= 7
-                             , grant_write_fds, node_queues, queue_sizes, node_busy, scheduler_type
+                             ,
+                             grant_write_fds, scheduler
 #endif
                              );
           continue;
@@ -513,9 +581,11 @@ int main(int argc, char *argv[]) {
           }
 #endif
 #if MILESTONE >= 7
-          for(int i = 0; i < num_travelers; i++) {
+          for (int i = 0; i < num_travelers; i++) {
             close(grant_write_fds[i]);
           }
+          scheduler_destroy(scheduler);
+          scheduler = NULL;
 #endif
           completionCleanupDone = true;
         }
@@ -524,11 +594,11 @@ int main(int argc, char *argv[]) {
 
     BeginDrawing();
     ClearBackground(RAYWHITE);
-    DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix);
+    DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix, scheduler_name);
     DrawText("Milestone Simulation", 20, 20, 20, DARKGRAY);
 
 #if MILESTONE >= 7
-    DrawText(TextFormat("Scheduler: %s", scheduler_type), 20, 50, 20, BLUE);
+    DrawText(TextFormat("Scheduler: %s", scheduler_name), 20, 50, 20, BLUE);
 #endif
 
     if (!simulationCompleted) {
@@ -556,6 +626,13 @@ int main(int argc, char *argv[]) {
         pipe_open = false;
 #if MILESTONE == 6
         node_locks_destroy(semaphore_id);
+#endif
+#if MILESTONE >= 7
+        for (int i = 0; i < num_travelers; i++) {
+          close(grant_pipes[i][0]);
+          close(grant_pipes[i][1]);
+        }
+        scheduler_destroy(scheduler);
 #endif
         free(child_reaped);
         free(cars);
@@ -589,10 +666,16 @@ int main(int argc, char *argv[]) {
 #endif
 #if MILESTONE >= 7
   if (!completionCleanupDone && children_started) {
-      for(int i = 0; i < num_travelers; i++) {
-        close(grant_write_fds[i]);
-      }
+    for (int i = 0; i < num_travelers; i++) {
+      close(grant_write_fds[i]);
+    }
+  } else if (!children_started) {
+    for (int i = 0; i < num_travelers; i++) {
+      close(grant_pipes[i][0]);
+      close(grant_pipes[i][1]);
+    }
   }
+  scheduler_destroy(scheduler);
 #endif
 
   free(child_reaped);

@@ -28,4 +28,5 @@ vgcore.*
 sim
 dijkstra
 *.txt
+!tests/inputs/ms7_scheduler_comparison.txt
 cmake-build-debug/

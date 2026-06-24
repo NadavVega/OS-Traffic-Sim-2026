@@ -55,3 +55,9 @@ make milestone7
 make milestone7
 ./sim -schd sjf <file-name>
 ```
+
+`./sim <file-name>` is still supported and defaults to FCFS.
+
+FCFS selects the first waiting traveler in the node queue. SJF selects the
+waiting traveler with the shortest next edge weight, using that next travel
+time as the job length.
