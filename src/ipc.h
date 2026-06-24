@@ -8,8 +8,11 @@ typedef enum {
   IPC_ARRIVED_DEST = 1,
   IPC_FINISHED = 2,
   IPC_NO_PATH = 3,
-  IPC_WAITING_LOCK = 4, // New state for Milestone 6
-  IPC_INSIDE_NODE = 5   // New state for Milestone 6
+  IPC_WAITING_LOCK = 4, // Milestone 6
+  IPC_INSIDE_NODE = 5,  // Milestone 6
+  IPC_REQUEST_NODE = 6, // Milestone 7: Child asks for permission
+  IPC_GRANTED_NODE = 7, // Milestone 7: Parent grants permission
+  IPC_LEFT_NODE = 8     // Milestone 7: Child notifies it left the node
 } IpcStatus;
 
 typedef struct {

@@ -28,3 +28,4 @@ vgcore.*
 sim
 dijkstra
 *.txt
+cmake-build-debug/

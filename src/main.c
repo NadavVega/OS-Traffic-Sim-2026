@@ -9,7 +9,7 @@
 #if MILESTONE >= 5
 #include "ipc.h"
 #endif
-#if MILESTONE >= 6
+#if MILESTONE == 6
 #include "node_locks.h"
 #endif
 #include "parser.h"
@@ -37,7 +37,13 @@ static int find_traveler_by_pid(const Traveler travelers[], int num_travelers,
 static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
                                Entity entities[], int num_travelers,
                                const VisualNode nodes[], int num_nodes,
-                               int graph[15][15], bool update_display) {
+                               int graph[15][15], bool update_display
+#if MILESTONE >= 7
+                               , int grant_write_fds[], int node_queues[MAX_NODES][MAX_NODES],
+                               int queue_sizes[MAX_NODES], bool node_busy[MAX_NODES],
+                               const char* scheduler_type
+#endif
+                               ) {
   int traveler_index =
       find_traveler_by_pid(travelers, num_travelers, message->pid);
   if (traveler_index < 0) {
@@ -119,6 +125,68 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     printf("[PID=%d] entered node %d\n", message->pid,
            message->current_node);
     break;
+
+#if MILESTONE >= 7
+  case IPC_REQUEST_NODE: {
+    if (message->current_node < 0 || message->current_node >= num_nodes) return;
+    entity->currentNode = message->current_node;
+    entity->nextNode = message->next_node;
+    entity->visualState = ENTITY_VISUAL_WAITING;
+    entity->timer = 0.0f;
+    entity->movementDuration = 0.0f;
+
+    int node = message->current_node;
+    node_queues[node][queue_sizes[node]++] = traveler_index;
+
+    printf("[PID=%d] requested node %d (Queue size: %d)\n", message->pid, node, queue_sizes[node]);
+
+    // If node is free, grant permission to the first in queue (FCFS)
+    if (!node_busy[node]) {
+        node_busy[node] = true;
+        int next_traveler = node_queues[node][0];
+
+        // Shift queue forward
+        queue_sizes[node]--;
+        for(int i = 0; i < queue_sizes[node]; i++) {
+            node_queues[node][i] = node_queues[node][i+1];
+        }
+
+        IpcMessage grant = { .status = IPC_GRANTED_NODE };
+        write(grant_write_fds[next_traveler], &grant, sizeof(grant));
+        printf("  -> Scheduler (%s) granted node %d to PID %d\n", scheduler_type, node, travelers[next_traveler].pid);
+    }
+    break;
+  }
+  case IPC_LEFT_NODE: {
+    if (message->current_node < 0 || message->current_node >= num_nodes) return;
+    int left_node = message->current_node;
+    node_busy[left_node] = false;
+    printf("[PID=%d] left node %d\n", message->pid, left_node);
+
+    if (queue_sizes[left_node] > 0) {
+        node_busy[left_node] = true;
+
+        // ==========================================
+        // TODO: SJF SCHEDULING LOGIC HERE
+        // If strcmp(scheduler_type, "sjf") == 0, sort the node_queues[left_node]
+        // array here based on shortest remaining path or weight before picking index 0!
+        // ==========================================
+
+        int next_traveler = node_queues[left_node][0];
+
+        // Shift queue forward
+        queue_sizes[left_node]--;
+        for(int i = 0; i < queue_sizes[left_node]; i++) {
+            node_queues[left_node][i] = node_queues[left_node][i+1];
+        }
+
+        IpcMessage grant = { .status = IPC_GRANTED_NODE };
+        write(grant_write_fds[next_traveler], &grant, sizeof(grant));
+        printf("  -> Scheduler (%s) granted node %d to PID %d\n", scheduler_type, left_node, travelers[next_traveler].pid);
+    }
+    break;
+  }
+#endif
   }
   fflush(stdout);
 }
@@ -140,9 +208,12 @@ static void terminate_and_wait_for_ms5_children(
 static int start_ms5_children(Graph *graph, Traveler travelers[],
                               int num_travelers, int pipe_fd[2],
                               bool child_reaped[]
-#if MILESTONE >= 6
+#if MILESTONE == 6
                               ,
                               int semaphore_id
+#elif MILESTONE >= 7
+                              ,
+                              int grant_pipes[][2]
 #endif
 ) {
   int children_started = 0;
@@ -158,7 +229,16 @@ static int start_ms5_children(Graph *graph, Traveler travelers[],
     }
     if (pid == 0) {
       close(pipe_fd[0]);
-#if MILESTONE >= 6
+#if MILESTONE >= 7
+      for(int j = 0; j < num_travelers; j++) {
+        close(grant_pipes[j][1]); // Child doesn't write to grant pipes
+        if (j != i) {
+          close(grant_pipes[j][0]); // Child only needs its own read pipe
+        }
+      }
+      run_child_process(graph, travelers[i].src, travelers[i].dest, pipe_fd[1],
+                        grant_pipes[i][0]);
+#elif MILESTONE == 6
       run_child_process(graph, travelers[i].src, travelers[i].dest, pipe_fd[1],
                         semaphore_id);
 #else
@@ -262,14 +342,24 @@ int main(int argc, char *argv[]) {
   // ==========================================
   // 1. Data Parsing and Validation (Bar's Logic)
   // ==========================================
-  if (argc != 2) {
-    fprintf(stderr, "Usage: %s <file_name>\n", argv[0]);
+  if (argc != 2 && argc != 3) {
+    fprintf(stderr, "Usage: %s [scheduler] <file_name>\n", argv[0]);
     return EXIT_FAILURE;
+  }
+
+  char *scheduler_type = "fcfs";
+  char *filename = NULL;
+
+  if (argc == 3) {
+    scheduler_type = argv[1];
+    filename = argv[2];
+  } else {
+    filename = argv[1];
   }
 
   Traveler *travelers = NULL;
   int num_travelers = 0;
-  Graph *graph = parse_graph_from_file(argv[1], &travelers, &num_travelers);
+  Graph *graph = parse_graph_from_file(filename, &travelers, &num_travelers);
 
   if (graph == NULL || travelers == NULL || num_travelers <= 0) {
     fprintf(stderr, "Error: Invalid input or negative weights detected.\n");
@@ -301,7 +391,7 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-#if MILESTONE >= 6
+#if MILESTONE == 6
   int semaphore_id = node_locks_create(graph->num_nodes);
   if (semaphore_id == -1) {
     close(pipe_fd[0]);
@@ -314,13 +404,29 @@ int main(int argc, char *argv[]) {
   bool node_locks_destroyed = false;
 #endif
 
+#if MILESTONE >= 7
+  int grant_pipes[num_travelers][2];
+  int grant_write_fds[num_travelers];
+  for (int i = 0; i < num_travelers; i++) {
+    if (pipe(grant_pipes[i]) == -1) {
+      perror("Error: Failed to create grant pipes");
+      // Memory cleanup handled in standard exit logic if needed
+      return EXIT_FAILURE;
+    }
+    grant_write_fds[i] = grant_pipes[i][1];
+  }
+  int node_queues[MAX_NODES][MAX_NODES];
+  int queue_sizes[MAX_NODES] = {0};
+  bool node_busy[MAX_NODES] = {false};
+#endif
+
   SetTraceLogLevel(LOG_WARNING);
-  InitWindow(1000, 800, "Traffic Simulation 2026 - Milestone 5");
+  InitWindow(1000, 800, "Traffic Simulation 2026 - Milestone 5/6/7");
   if (!IsWindowReady()) {
     fprintf(stderr, "Error: Failed to initialize GUI window.\n");
     close(pipe_fd[0]);
     close(pipe_fd[1]);
-#if MILESTONE >= 6
+#if MILESTONE == 6
     node_locks_destroy(semaphore_id);
 #endif
     free(child_reaped);
@@ -338,7 +444,7 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Error: Failed to allocate memory for entities.\n");
     close(pipe_fd[0]);
     close(pipe_fd[1]);
-#if MILESTONE >= 6
+#if MILESTONE == 6
     node_locks_destroy(semaphore_id);
 #endif
     free(child_reaped);
@@ -369,7 +475,11 @@ int main(int argc, char *argv[]) {
         IpcReadResult read_result = ipc_read_message(pipe_fd[0], &message);
         if (read_result == IPC_READ_MESSAGE) {
           handle_ipc_message(&message, travelers, cars, num_travelers, vNodes,
-                             graph->num_nodes, graph->matrix, isPlaying);
+                             graph->num_nodes, graph->matrix, isPlaying
+#if MILESTONE >= 7
+                             , grant_write_fds, node_queues, queue_sizes, node_busy, scheduler_type
+#endif
+                             );
           continue;
         }
         if (read_result == IPC_READ_EOF || read_result == IPC_READ_ERROR) {
@@ -398,10 +508,15 @@ int main(int argc, char *argv[]) {
           }
           terminate_and_wait_for_ms5_children(travelers, child_reaped,
                                               num_travelers);
-#if MILESTONE >= 6
+#if MILESTONE == 6
           if (!node_locks_destroyed) {
             node_locks_destroy(semaphore_id);
             node_locks_destroyed = true;
+          }
+#endif
+#if MILESTONE >= 7
+          for(int i = 0; i < num_travelers; i++) {
+            close(grant_write_fds[i]);
           }
 #endif
           completionCleanupDone = true;
@@ -412,7 +527,12 @@ int main(int argc, char *argv[]) {
     BeginDrawing();
     ClearBackground(RAYWHITE);
     DrawStaticGraph(graph->num_nodes, vNodes, graph->matrix);
-    DrawText("Milestone 5: IPC Traffic Animation", 20, 20, 20, DARKGRAY);
+    DrawText("Milestone Simulation", 20, 20, 20, DARKGRAY);
+
+#if MILESTONE >= 7
+    DrawText(TextFormat("Scheduler: %s", scheduler_type), 20, 50, 20, BLUE);
+#endif
+
     if (!simulationCompleted) {
       if (DrawButton(buttonBounds, isPlaying ? "STOP" : "PLAY", isPlaying)) {
         isPlaying = !isPlaying;
@@ -427,13 +547,16 @@ int main(int argc, char *argv[]) {
     if (!simulationCompleted && isPlaying && !children_started) {
       if (start_ms5_children(graph, travelers, num_travelers, pipe_fd,
                              child_reaped
-#if MILESTONE >= 6
+#if MILESTONE == 6
                              ,
                              semaphore_id
+#elif MILESTONE >= 7
+                             ,
+                             grant_pipes
 #endif
                              ) == -1) {
         pipe_open = false;
-#if MILESTONE >= 6
+#if MILESTONE == 6
         node_locks_destroy(semaphore_id);
 #endif
         free(child_reaped);
@@ -444,6 +567,11 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
       }
       children_started = true;
+#if MILESTONE >= 7
+      for(int i = 0; i < num_travelers; i++) {
+        close(grant_pipes[i][0]); // Parent closes read ends of grant pipes
+      }
+#endif
     }
   }
 
@@ -456,11 +584,19 @@ int main(int argc, char *argv[]) {
     terminate_and_wait_for_ms5_children(travelers, child_reaped,
                                         num_travelers);
   }
-#if MILESTONE >= 6
+#if MILESTONE == 6
   if (!node_locks_destroyed) {
     node_locks_destroy(semaphore_id);
   }
 #endif
+#if MILESTONE >= 7
+  if (!completionCleanupDone && children_started) {
+      for(int i = 0; i < num_travelers; i++) {
+        close(grant_write_fds[i]);
+      }
+  }
+#endif
+
   free(child_reaped);
   free(cars);
   free(travelers);

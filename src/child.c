@@ -3,7 +3,7 @@
 #include "dijkstra.h"
 #include "ipc.h"
 #endif
-#if MILESTONE >= 6
+#if MILESTONE == 6
 #include "node_locks.h"
 #endif
 #include <stdbool.h>
@@ -13,9 +13,12 @@
 
 #if MILESTONE == 5
 void run_child_process(Graph *graph, int src, int dest, int write_fd) {
-#elif MILESTONE >= 6
+#elif MILESTONE == 6
 void run_child_process(Graph *graph, int src, int dest, int write_fd,
                        int semaphore_id) {
+#elif MILESTONE >= 7
+void run_child_process(Graph *graph, int src, int dest, int write_fd,
+                       int grant_read_fd) {
 #endif
 #if MILESTONE >= 5
   dijkstraResult result = find_shortest_path(graph->num_nodes, graph->matrix, src, dest);
@@ -40,7 +43,7 @@ void run_child_process(Graph *graph, int src, int dest, int write_fd,
     int current = result.path[i];
     int next = at_destination ? -1 : result.path[i + 1];
 
-#if MILESTONE >= 6
+#if MILESTONE == 6
     IpcMessage waiting_msg = { .pid = pid, .current_node = current, .next_node = next, .status = IPC_WAITING_LOCK };
     if (ipc_send_message(write_fd, &waiting_msg) == -1) { close(write_fd); exit(EXIT_FAILURE); }
 
@@ -62,6 +65,26 @@ void run_child_process(Graph *graph, int src, int dest, int write_fd,
       close(write_fd);
       exit(EXIT_FAILURE);
     }
+#elif MILESTONE >= 7
+    // 1. Request permission from the parent scheduler
+    IpcMessage req_msg = { .pid = pid, .current_node = current, .next_node = next, .status = IPC_REQUEST_NODE };
+    if (ipc_send_message(write_fd, &req_msg) == -1) { close(write_fd); exit(EXIT_FAILURE); }
+
+    // 2. Block and wait for the parent to grant permission via the private pipe
+    IpcMessage grant_msg;
+    if (read(grant_read_fd, &grant_msg, sizeof(grant_msg)) <= 0) {
+        close(write_fd); exit(EXIT_FAILURE);
+    }
+
+    // 3. Permission granted! Enter the node.
+    IpcMessage inside_msg = { .pid = pid, .current_node = current, .next_node = next, .status = IPC_INSIDE_NODE };
+    if (ipc_send_message(write_fd, &inside_msg) == -1) { close(write_fd); exit(EXIT_FAILURE); }
+
+    sleep(1);
+
+    // 4. Leave the node and notify the parent
+    IpcMessage left_msg = { .pid = pid, .current_node = current, .next_node = next, .status = IPC_LEFT_NODE };
+    if (ipc_send_message(write_fd, &left_msg) == -1) { close(write_fd); exit(EXIT_FAILURE); }
 #endif
 
     IpcMessage movement_msg = { .pid = pid, .current_node = current, .next_node = next, .status = at_destination ? IPC_ARRIVED_DEST : IPC_EN_ROUTE };
