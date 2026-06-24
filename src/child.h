@@ -9,11 +9,16 @@
 #include "graph.h"
 
 void run_child_process(Graph *graph, int src, int dest, int write_fd);
-#elif MILESTONE >= 6
+#elif MILESTONE == 6
 #include "graph.h"
 
 void run_child_process(Graph *graph, int src, int dest, int write_fd,
                        int semaphore_id);
+#elif MILESTONE >= 7
+#include "graph.h"
+
+void run_child_process(Graph *graph, int src, int dest, int write_fd,
+                       int grant_read_fd);
 #else
 // The main function that will be executed by each child process
 void run_child_process(void);
