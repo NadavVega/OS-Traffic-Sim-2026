@@ -357,7 +357,7 @@ int main(int argc, char *argv[]) {
 
   Traveler *travelers = NULL;
   int num_travelers = 0;
-  Graph *graph = parse_graph_from_file(filename, &travelers, &num_travelers);
+  Graph *graph = parse_graph_from_file(argv[1], &travelers, &num_travelers);
 
   if (graph == NULL || travelers == NULL || num_travelers <= 0) {
     fprintf(stderr, "Error: Invalid input or negative weights detected.\n");
