@@ -26,7 +26,8 @@ extern const Color travelerColors[15];
 void InitGraphVisuals(int num_nodes, VisualNode nodes[]);
 
 // Function to draw the static graph (nodes, edges, arrows, and weights)
-void DrawStaticGraph(int num_nodes, VisualNode nodes[], int graph[15][15]);
+// שנה את השורה הזו:
+void DrawStaticGraph(int num_nodes, VisualNode nodes[], int graph[15][15], const char* scheduler_name);
 
 // Function to handle interactive button rendering and click detection
 bool DrawButton(Rectangle bounds, const char *text, bool active);
