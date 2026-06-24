@@ -1,0 +1,15 @@
+# Milestone 7 scheduler comparison.
+# All travelers start at node 0, so node 0 becomes the shared bottleneck.
+# The next edge weights from node 0 differ:
+# 0->1 is 9, 0->2 is 2, and 0->3 is 5.
+# FCFS should grant queued travelers by request order.
+# SJF should prefer the traveler whose next edge from node 0 has weight 2.
+4 3
+0 1 9
+0 2 2
+0 3 5
+4
+0 1
+0 2
+0 3
+0 1
