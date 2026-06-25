@@ -1,8 +1,28 @@
 #include "gui.h"
 #include "raymath.h"
 #include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
+
+//========================================================
+// InitGraphVisuals:
+// Receives num_nodes and VisualNode array.
+// Places nodes in circle.
+// Returns nothing.
+
+// DrawStaticGraph:
+// Receives node count, visual nodes, graph matrix, scheduler name.
+// Draws edges, arrows, weights, and nodes.
+// Returns nothing.
+
+// UpdateIpcEntities:
+// Receives Entity array, node positions, graph matrix.
+// Moves travelers visually based on IPC state.
+// Returns nothing.
+
+// DrawEntities:
+// Receives Entity array.
+// Draws traveler circles and outlines according to visual state.
+//========================================================
+
 // Predefined colors for up to 15 travelers (Stage 4 - Unique Colors)
 const Color travelerColors[15] = {RED,    ORANGE,  YELLOW, GREEN, BLUE,
                                   PURPLE, PINK,    BROWN,  GRAY,  MAROON,

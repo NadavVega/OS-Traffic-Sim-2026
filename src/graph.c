@@ -2,10 +2,26 @@
 // Created by balah on 09/05/2026.
 //
 #include <math.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 #include "graph.h"
+
+//=====================================================
+// create_graph:
+// Receives nodes and edges.
+// Allocates Graph.
+// Initializes matrix to -1.
+// Returns Graph* or NULL.
+
+// add_edge:
+// Receives graph, src, dest, weight.
+// Adds directed weighted edge.
+// Returns nothing.
+
+// free_graph:
+// Receives Graph*.
+// Frees memory.
+//=====================================================
 
 // Data structures and memory management
 

@@ -2,6 +2,18 @@
 #include <limits.h>
 #include <stdio.h>
 
+//==================================================
+// find_shortest_path:
+// Receives number of nodes, adjacency matrix, start node, end node.
+// Returns dijkstraResult:
+// - path[]
+// - path_length
+// - total_weight
+
+// Special cases:
+// - start == end returns path length 1 and weight 0.
+// - no path returns total_weight = -1.
+//==================================================
 // Function to find the vertex with the minimum distance
 int find_min_distance(int num_nodes, int dist[], int visited[]) {
   int min = INT_MAX;

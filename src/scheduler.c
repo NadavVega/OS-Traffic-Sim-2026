@@ -4,6 +4,29 @@
 #include <stdlib.h>
 #include <string.h>
 
+//============================================================
+// scheduler_create:
+// Receives node_count and algorithm.
+// Allocates scheduler state, queues array, and busy array.
+// Returns SchedulerState* or NULL.
+
+// scheduler_add_waiting:
+// Receives scheduler, node, traveler index, pid, next node, job length.
+// Adds a traveler to that node queue.
+// Returns 0 success, -1 failure.
+
+// scheduler_choose_next:
+// Receives scheduler, node, output SchedulerItem*.
+// FCFS picks first item.
+// SJF scans queue and picks smallest job_length.
+// Returns 1 selected, 0 queue empty, -1 error.
+
+// scheduler_mark_node_busy/free:
+// Receives scheduler and node.
+// Sets node busy/free.
+// Returns 0 success, -1 error.
+//=============================================================
+
 typedef struct SchedulerNodeItem {
   SchedulerItem item;
   struct SchedulerNodeItem *next;
@@ -20,7 +43,12 @@ static bool scheduler_valid_node(const SchedulerState *scheduler, int node) {
   return scheduler != NULL && node >= 0 && node < scheduler->node_count;
 }
 
+// ===================================================
+// SECTION: Milestone 7 per-node waiting queues
+// ===================================================
+
 SchedulerState *scheduler_create(int node_count, SchedulerAlgorithm algorithm) {
+
   if (node_count <= 0) {
     fprintf(stderr, "Error: Scheduler node count must be positive.\n");
     return NULL;
@@ -32,7 +60,8 @@ SchedulerState *scheduler_create(int node_count, SchedulerAlgorithm algorithm) {
   }
 
   scheduler->queues = calloc((size_t)node_count, sizeof(*scheduler->queues));
-  scheduler->node_busy = calloc((size_t)node_count, sizeof(*scheduler->node_busy));
+  scheduler->node_busy =
+      calloc((size_t)node_count, sizeof(*scheduler->node_busy));
   if (scheduler->queues == NULL || scheduler->node_busy == NULL) {
     scheduler_destroy(scheduler);
     return NULL;
@@ -67,6 +96,7 @@ void scheduler_destroy(SchedulerState *scheduler) {
 int scheduler_add_waiting(SchedulerState *scheduler, int node,
                           int traveler_index, pid_t pid, int next_node,
                           int job_length) {
+
   if (!scheduler_valid_node(scheduler, node) || traveler_index < 0) {
     return -1;
   }
@@ -99,6 +129,7 @@ int scheduler_add_waiting(SchedulerState *scheduler, int node,
 
 int scheduler_choose_next(SchedulerState *scheduler, int node,
                           SchedulerItem *selected) {
+
   if (!scheduler_valid_node(scheduler, node) || selected == NULL) {
     return -1;
   }

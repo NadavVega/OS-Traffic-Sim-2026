@@ -1,12 +1,12 @@
 #ifndef MILESTONE
 #define MILESTONE 4
 #endif
-#include <string.h>
-#include <stdlib.h>
 #include "child.h"
 #include "dijkstra.h"
 #include "graph.h"
 #include "gui.h" // Nave's functions
+#include <stdlib.h>
+#include <string.h>
 #if MILESTONE >= 5
 #include "ipc.h"
 #endif
@@ -27,6 +27,56 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+//====================================================================
+// find_traveler_by_pid:
+// Receives travelers array, count, pid.
+// Returns traveler index or -1.
+
+// grant_next_waiting_traveler:
+// Milestone 7 only.
+// Receives scheduler, node, grant_write_fds, travelers.
+// Chooses next waiting traveler and sends IPC_GRANTED_NODE through private
+// pipe. Returns 1 granted, 0 no waiting traveler, -1 error.
+
+// handle_ipc_message:
+// Receives IpcMessage and project state.
+// Finds traveler by PID.
+// Updates Entity state.
+// Prints logs.
+// For Milestone 7, handles IPC_REQUEST_NODE and IPC_LEFT_NODE.
+
+// start_ms5_children:
+// Receives graph, travelers, pipe, child_reaped, plus semaphore or grant pipes.
+// Forks one child per traveler.
+// In child: closes unused FDs and calls run_child_process.
+// In parent: stores PID.
+// Returns 0 success, -1 failure.
+
+// reap_exited_children:
+// Receives travelers and child_reaped.
+// Uses waitpid(..., WNOHANG).
+// Returns nothing.
+
+// terminate_and_wait_for_ms5_children:
+// Receives travelers and child_reaped.
+// Kills unfinished children if needed.
+// Waits for them.
+// Returns nothing.
+
+// main:
+// Receives argc/argv.
+// Parses command line.
+// Loads graph and travelers.
+// Creates IPC pipe.
+// Creates semaphore/scheduler resources depending on milestone.
+// Starts GUI loop.
+// Starts children on PLAY.
+// Reads IPC.
+// Draws GUI.
+// Cleans up everything.
+// Returns EXIT_SUCCESS or EXIT_FAILURE.
+//==========================================================================
+
 #if MILESTONE >= 5
 static int find_traveler_by_pid(const Traveler travelers[], int num_travelers,
                                 pid_t pid) {
@@ -37,6 +87,10 @@ static int find_traveler_by_pid(const Traveler travelers[], int num_travelers,
   }
   return -1;
 }
+
+// ===================================================
+// SECTION: Milestone 7 scheduler grant flow
+// ===================================================
 
 #if MILESTONE >= 7
 static int grant_next_waiting_traveler(SchedulerState *scheduler, int node,
@@ -53,7 +107,8 @@ static int grant_next_waiting_traveler(SchedulerState *scheduler, int node,
   }
 
   IpcMessage grant = {.status = IPC_GRANTED_NODE};
-  if (ipc_send_message(grant_write_fds[selected.traveler_index], &grant) == -1) {
+  if (ipc_send_message(grant_write_fds[selected.traveler_index], &grant) ==
+      -1) {
     scheduler_mark_node_free(scheduler, node);
     return -1;
   }
@@ -64,16 +119,19 @@ static int grant_next_waiting_traveler(SchedulerState *scheduler, int node,
 }
 #endif
 
+// ===================================================
+// SECTION: Parent-side IPC handling and GUI state updates
+// ===================================================
+
 static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
                                Entity entities[], int num_travelers,
                                const VisualNode nodes[], int num_nodes,
                                int graph[15][15], bool update_display
 #if MILESTONE >= 7
                                ,
-                               int grant_write_fds[],
-                               SchedulerState *scheduler
+                               int grant_write_fds[], SchedulerState *scheduler
 #endif
-                               ) {
+) {
   int traveler_index =
       find_traveler_by_pid(travelers, num_travelers, message->pid);
   if (traveler_index < 0) {
@@ -152,8 +210,7 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     if (update_display) {
       entity->currentPos = nodes[message->current_node].pos;
     }
-    printf("[PID=%d] entered node %d\n", message->pid,
-           message->current_node);
+    printf("[PID=%d] entered node %d\n", message->pid, message->current_node);
     break;
 
 #if MILESTONE >= 7
@@ -183,8 +240,8 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
       return;
     }
 
-    printf("[PID=%d] requested node %d (next edge weight: %d)\n",
-           message->pid, node, job_length);
+    printf("[PID=%d] requested node %d (next edge weight: %d)\n", message->pid,
+           node, job_length);
 
     if (!scheduler_is_node_busy(scheduler, node)) {
       grant_next_waiting_traveler(scheduler, node, grant_write_fds, travelers);
@@ -225,8 +282,13 @@ static bool all_ms5_children_finished(const Entity entities[],
   return true;
 }
 
-static void terminate_and_wait_for_ms5_children(
-    const Traveler travelers[], bool child_reaped[], int num_travelers);
+static void terminate_and_wait_for_ms5_children(const Traveler travelers[],
+                                                bool child_reaped[],
+                                                int num_travelers);
+
+// ===================================================
+// SECTION: Child process creation and cleanup
+// ===================================================
 
 static int start_ms5_children(Graph *graph, Traveler travelers[],
                               int num_travelers, int pipe_fd[2],
@@ -253,7 +315,7 @@ static int start_ms5_children(Graph *graph, Traveler travelers[],
     if (pid == 0) {
       close(pipe_fd[0]);
 #if MILESTONE >= 7
-      for(int j = 0; j < num_travelers; j++) {
+      for (int j = 0; j < num_travelers; j++) {
         close(grant_pipes[j][1]); // Child doesn't write to grant pipes
         if (j != i) {
           close(grant_pipes[j][0]); // Child only needs its own read pipe
@@ -265,8 +327,7 @@ static int start_ms5_children(Graph *graph, Traveler travelers[],
       run_child_process(graph, travelers[i].src, travelers[i].dest, pipe_fd[1],
                         semaphore_id);
 #else
-      run_child_process(graph, travelers[i].src, travelers[i].dest,
-                        pipe_fd[1]);
+      run_child_process(graph, travelers[i].src, travelers[i].dest, pipe_fd[1]);
 #endif
     }
 
@@ -278,8 +339,8 @@ static int start_ms5_children(Graph *graph, Traveler travelers[],
   return 0;
 }
 
-static void reap_exited_children(const Traveler travelers[], bool child_reaped[],
-                                 int num_travelers) {
+static void reap_exited_children(const Traveler travelers[],
+                                 bool child_reaped[], int num_travelers) {
   for (int i = 0; i < num_travelers; i++) {
     if (travelers[i].pid <= 0 || child_reaped[i]) {
       continue;
@@ -298,8 +359,9 @@ static void reap_exited_children(const Traveler travelers[], bool child_reaped[]
   }
 }
 
-static void terminate_and_wait_for_ms5_children(
-    const Traveler travelers[], bool child_reaped[], int num_travelers) {
+static void terminate_and_wait_for_ms5_children(const Traveler travelers[],
+                                                bool child_reaped[],
+                                                int num_travelers) {
   for (int i = 0; i < num_travelers; i++) {
     if (travelers[i].pid <= 0 || child_reaped[i]) {
       continue;
@@ -360,6 +422,15 @@ static void terminate_and_wait_for_child(pid_t *pid, bool *termination_sent) {
   *pid = 0;
 }
 #endif
+
+// ===================================================
+// SECTION: Program setup, GUI loop, and final cleanup
+// ===================================================
+
+// ===================================================
+// ------------------ MAIN ---------------------------
+// ===================================================
+
 int main(int argc, char *argv[]) {
   const char *input_filename = NULL;
   const char *scheduler_name = "fcfs";
@@ -387,7 +458,8 @@ int main(int argc, char *argv[]) {
 
   Traveler *travelers = NULL;
   int num_travelers = 0;
-  Graph *graph = parse_graph_from_file(input_filename, &travelers, &num_travelers);
+  Graph *graph =
+      parse_graph_from_file(input_filename, &travelers, &num_travelers);
 
   if (graph == NULL || travelers == NULL || num_travelers <= 0) {
     fprintf(stderr, "Error: Invalid input or negative weights detected.\n");
@@ -545,7 +617,7 @@ int main(int argc, char *argv[]) {
                              ,
                              grant_write_fds, scheduler
 #endif
-                             );
+          );
           continue;
         }
         if (read_result == IPC_READ_EOF || read_result == IPC_READ_ERROR) {
@@ -643,7 +715,7 @@ int main(int argc, char *argv[]) {
       }
       children_started = true;
 #if MILESTONE >= 7
-      for(int i = 0; i < num_travelers; i++) {
+      for (int i = 0; i < num_travelers; i++) {
         close(grant_pipes[i][0]); // Parent closes read ends of grant pipes
       }
 #endif
@@ -656,8 +728,7 @@ int main(int argc, char *argv[]) {
   if (!children_started) {
     close(pipe_fd[1]);
   } else {
-    terminate_and_wait_for_ms5_children(travelers, child_reaped,
-                                        num_travelers);
+    terminate_and_wait_for_ms5_children(travelers, child_reaped, num_travelers);
   }
 #if MILESTONE == 6
   if (!node_locks_destroyed) {
@@ -722,8 +793,7 @@ int main(int argc, char *argv[]) {
     if (pid < 0) {
       fprintf(stderr, "Error: Failed to fork process for traveler %d\n", i);
       for (int j = 0; j < i; j++) {
-        terminate_and_wait_for_child(&travelers[j].pid,
-                                     &termination_sent[j]);
+        terminate_and_wait_for_child(&travelers[j].pid, &termination_sent[j]);
       }
       free(termination_sent);
       for (int j = 0; j < num_travelers; j++) {
@@ -803,8 +873,7 @@ int main(int argc, char *argv[]) {
       for (int i = 0; i < num_travelers; i++) {
         if (!termination_sent[i] &&
             cars[i].endNode >= travelers[i].path_length) {
-          terminate_and_wait_for_child(&travelers[i].pid,
-                                       &termination_sent[i]);
+          terminate_and_wait_for_child(&travelers[i].pid, &termination_sent[i]);
         }
       }
 
@@ -815,7 +884,7 @@ int main(int argc, char *argv[]) {
       }
     }
 
-BeginDrawing();
+    BeginDrawing();
     ClearBackground(RAYWHITE);
 
     // Pass the scheduler name to the drawing function for Milestone 4 fallback

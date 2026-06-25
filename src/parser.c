@@ -5,9 +5,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+//===========================================================
+// parse_graph_from_file:
+// Receives filename, Traveler** and int*.
+// Allocates graph and travelers array.
+// Returns Graph* on success, NULL on error.
+//===========================================================
+
 #define INPUT_LINE_SIZE 256
 
-static bool read_data_line(FILE *fp, char *line, size_t size, int *line_number) {
+static bool read_data_line(FILE *fp, char *line, size_t size,
+                           int *line_number) {
   while (fgets(line, size, fp) != NULL) {
     (*line_number)++;
 
@@ -99,7 +107,8 @@ Graph *parse_graph_from_file(const char *filename, Traveler **travelers,
     int u, v, w;
     if (!read_data_line(fp, line, sizeof(line), &line_number) ||
         !parse_three_ints(line, &u, &v, &w)) {
-      fprintf(stderr, "Error: Expected edge %d as: source destination weight.\n",
+      fprintf(stderr,
+              "Error: Expected edge %d as: source destination weight.\n",
               i + 1);
       free_graph(g);
       fclose(fp);
@@ -125,7 +134,8 @@ Graph *parse_graph_from_file(const char *filename, Traveler **travelers,
 
   if (!read_data_line(fp, line, sizeof(line), &line_number) ||
       !parse_one_int(line, num_travelers)) {
-    fprintf(stderr, "Error: Expected the number of travelers after the edges.\n");
+    fprintf(stderr,
+            "Error: Expected the number of travelers after the edges.\n");
     free_graph(g);
     fclose(fp);
     return NULL;
@@ -150,8 +160,8 @@ Graph *parse_graph_from_file(const char *filename, Traveler **travelers,
     int src, dest;
     if (!read_data_line(fp, line, sizeof(line), &line_number) ||
         !parse_two_ints(line, &src, &dest)) {
-      fprintf(stderr,
-              "Error: Expected traveler %d as: source destination.\n", i + 1);
+      fprintf(stderr, "Error: Expected traveler %d as: source destination.\n",
+              i + 1);
       free(*travelers);
       *travelers = NULL;
       *num_travelers = 0;
@@ -160,10 +170,9 @@ Graph *parse_graph_from_file(const char *filename, Traveler **travelers,
       return NULL;
     }
     if (src < 0 || src >= nodes || dest < 0 || dest >= nodes) {
-      fprintf(
-          stderr,
-          "Error: Traveler %d at line %d uses node index outside 0-%d.\n",
-          i + 1, line_number, nodes - 1);
+      fprintf(stderr,
+              "Error: Traveler %d at line %d uses node index outside 0-%d.\n",
+              i + 1, line_number, nodes - 1);
       free(*travelers);
       *travelers = NULL;
       *num_travelers = 0;
