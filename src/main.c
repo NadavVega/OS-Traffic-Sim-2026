@@ -183,8 +183,12 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
     entity->visualState = ENTITY_VISUAL_IDLE;
     entity->timer = 0.0f;
     entity->movementDuration = 0.0f;
-    printf("[PID=%d] No path found from %d to %d\n", message->pid,
-           travelers[traveler_index].src, travelers[traveler_index].dest);
+      // שינוי למשימה ג' - הדפסה מיוחדת ובולטת לערוץ השגיאות (stderr)
+      fprintf(stderr, "\n==================================================\n");
+      fprintf(stderr, "[SPECIAL ALERT] Traveler (PID=%d) discovered GRAPH IS DISCONNECTED!\n", message->pid);
+      fprintf(stderr, "No valid route exists from source %d to destination %d.\n",
+              travelers[traveler_index].src, travelers[traveler_index].dest);
+      fprintf(stderr, "==================================================\n\n");
     break;
   case IPC_WAITING_LOCK:
     if (message->current_node < 0 || message->current_node >= num_nodes) {
