@@ -127,7 +127,10 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
                                Entity entities[], int num_travelers,
                                const VisualNode nodes[], int num_nodes,
                                int graph[15][15], bool update_display
-#if MILESTONE >= 7
+#if MILESTONE == 5
+                               ,
+                               int ack_write_fds[]
+#elif MILESTONE >= 7
                                ,
                                int grant_write_fds[], SchedulerState *scheduler
 #endif
@@ -268,6 +271,15 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
   case IPC_GRANTED_NODE:
     break;
   }
+
+  #if MILESTONE == 5
+  if (message->status != IPC_FINISHED) {
+    if (ipc_send_message(ack_write_fds[traveler_index], message) == -1) {
+      fprintf(stderr, "Error: Failed to send ACK to PID %d\n", message->pid);
+    }
+  }
+#endif
+
   fflush(stdout);
 }
 
@@ -293,7 +305,10 @@ static void terminate_and_wait_for_ms5_children(const Traveler travelers[],
 static int start_ms5_children(Graph *graph, Traveler travelers[],
                               int num_travelers, int pipe_fd[2],
                               bool child_reaped[]
-#if MILESTONE == 6
+#if MILESTONE == 5
+                              ,
+                              int ack_pipes[][2]
+#elif MILESTONE == 6
                               ,
                               int semaphore_id
 #elif MILESTONE >= 7
@@ -314,20 +329,33 @@ static int start_ms5_children(Graph *graph, Traveler travelers[],
     }
     if (pid == 0) {
       close(pipe_fd[0]);
-#if MILESTONE >= 7
+#if MILESTONE == 5
       for (int j = 0; j < num_travelers; j++) {
-        close(grant_pipes[j][1]); // Child doesn't write to grant pipes
+        close(ack_pipes[j][1]); // child does not write ACKs
+
         if (j != i) {
-          close(grant_pipes[j][0]); // Child only needs its own read pipe
+          close(ack_pipes[j][0]); // child only reads from its own ACK pipe
         }
       }
+
+      run_child_process(graph, travelers[i].src, travelers[i].dest,
+                        pipe_fd[1], ack_pipes[i][0]);
+
+#elif MILESTONE >= 7
+      for (int j = 0; j < num_travelers; j++) {
+        close(grant_pipes[j][1]); // child does not write to grant pipes
+
+        if (j != i) {
+          close(grant_pipes[j][0]); // child only reads from its own grant pipe
+        }
+      }
+
       run_child_process(graph, travelers[i].src, travelers[i].dest, pipe_fd[1],
                         grant_pipes[i][0]);
+
 #elif MILESTONE == 6
       run_child_process(graph, travelers[i].src, travelers[i].dest, pipe_fd[1],
                         semaphore_id);
-#else
-      run_child_process(graph, travelers[i].src, travelers[i].dest, pipe_fd[1]);
 #endif
     }
 
@@ -508,6 +536,31 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
+#if MILESTONE == 5
+  int ack_pipes[num_travelers][2];
+  int ack_write_fds[num_travelers];
+
+  for (int i = 0; i < num_travelers; i++) {
+    if (ipc_create_pipe(ack_pipes[i]) == -1) {
+      fprintf(stderr, "Error: Failed to create ACK pipe for traveler %d\n", i);
+
+      for (int j = 0; j < i; j++) {
+        close(ack_pipes[j][0]);
+        close(ack_pipes[j][1]);
+      }
+
+      close(pipe_fd[0]);
+      close(pipe_fd[1]);
+      free(child_reaped);
+      free(travelers);
+      free_graph(graph);
+      return EXIT_FAILURE;
+    }
+
+    ack_write_fds[i] = ack_pipes[i][1];
+  }
+#endif
+
 #if MILESTONE == 6
   int semaphore_id = node_locks_create(graph->num_nodes);
   if (semaphore_id == -1) {
@@ -612,12 +665,15 @@ int main(int argc, char *argv[]) {
         IpcReadResult read_result = ipc_read_message(pipe_fd[0], &message);
         if (read_result == IPC_READ_MESSAGE) {
           handle_ipc_message(&message, travelers, cars, num_travelers, vNodes,
-                             graph->num_nodes, graph->matrix, isPlaying
-#if MILESTONE >= 7
-                             ,
-                             grant_write_fds, scheduler
+                   graph->num_nodes, graph->matrix, isPlaying
+#if MILESTONE == 5
+                   ,
+                   ack_write_fds
+#elif MILESTONE >= 7
+                   ,
+                   grant_write_fds, scheduler
 #endif
-          );
+);
           continue;
         }
         if (read_result == IPC_READ_EOF || read_result == IPC_READ_ERROR) {
@@ -686,15 +742,18 @@ int main(int argc, char *argv[]) {
 
     if (!simulationCompleted && isPlaying && !children_started) {
       if (start_ms5_children(graph, travelers, num_travelers, pipe_fd,
-                             child_reaped
-#if MILESTONE == 6
-                             ,
-                             semaphore_id
+                       child_reaped
+#if MILESTONE == 5
+                       ,
+                       ack_pipes
+#elif MILESTONE == 6
+                       ,
+                       semaphore_id
 #elif MILESTONE >= 7
-                             ,
-                             grant_pipes
+                       ,
+                       grant_pipes
 #endif
-                             ) == -1) {
+                       ) == -1) {
         pipe_open = false;
 #if MILESTONE == 6
         node_locks_destroy(semaphore_id);
@@ -714,6 +773,11 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
       }
       children_started = true;
+      #if MILESTONE == 5
+      for (int i = 0; i < num_travelers; i++) {
+        close(ack_pipes[i][0]); // parent does not read ACK pipes
+      }
+#endif
 #if MILESTONE >= 7
       for (int i = 0; i < num_travelers; i++) {
         close(grant_pipes[i][0]); // Parent closes read ends of grant pipes

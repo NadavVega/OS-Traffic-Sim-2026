@@ -8,7 +8,8 @@
 #if MILESTONE == 5
 #include "graph.h"
 
-void run_child_process(Graph *graph, int src, int dest, int write_fd);
+void run_child_process(Graph *graph, int src, int dest, int write_fd,
+                       int ack_read_fd);
 #elif MILESTONE == 6
 #include "graph.h"
 

@@ -11,6 +11,20 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#if MILESTONE == 5
+static int wait_for_parent_ack(int ack_read_fd) {
+  IpcMessage ack;
+  IpcReadResult result = ipc_read_message(ack_read_fd, &ack);
+
+  if (result != IPC_READ_MESSAGE) {
+    fprintf(stderr, "Error: Child did not receive ACK from parent.\n");
+    return -1;
+  }
+
+  return 0;
+}
+#endif
+
 //=======================================================
 // run_child_process for MILESTONE 5:
 // Receives graph, src, dest, write_fd.
@@ -41,7 +55,8 @@
 // SECTION: Child process route execution and node access
 // ===================================================
 
-void run_child_process(Graph *graph, int src, int dest, int write_fd) {
+void run_child_process(Graph *graph, int src, int dest, int write_fd,
+                       int ack_read_fd) {
 
 #elif MILESTONE == 6
 
@@ -65,15 +80,35 @@ void run_child_process(Graph *graph, int src, int dest, int write_fd,
                           .current_node = src,
                           .next_node = -1,
                           .status = IPC_NO_PATH};
+
     if (ipc_send_message(write_fd, &no_path) == -1) {
+  #if MILESTONE == 5
+      close(ack_read_fd);
+  #endif
       close(write_fd);
       exit(EXIT_FAILURE);
     }
+
+  #if MILESTONE == 5
+    // Wait for parent approval after sending IPC_NO_PATH
+    if (wait_for_parent_ack(ack_read_fd) == -1) {
+      close(ack_read_fd);
+      close(write_fd);
+      exit(EXIT_FAILURE);
+    }
+  #endif
+
     IpcMessage finished = {.pid = pid,
-                           .current_node = src,
-                           .next_node = -1,
-                           .status = IPC_FINISHED};
+                          .current_node = src,
+                          .next_node = -1,
+                          .status = IPC_FINISHED};
+
     int send_result = ipc_send_message(write_fd, &finished);
+
+  #if MILESTONE == 5
+    close(ack_read_fd);
+  #endif
+
     close(write_fd);
     exit(send_result == 0 ? EXIT_SUCCESS : EXIT_FAILURE);
   }
@@ -162,10 +197,21 @@ void run_child_process(Graph *graph, int src, int dest, int write_fd,
                                .status = at_destination ? IPC_ARRIVED_DEST
                                                         : IPC_EN_ROUTE};
     if (ipc_send_message(write_fd, &movement_msg) == -1) {
+    #if MILESTONE == 5
+      close(ack_read_fd);
+    #endif
       close(write_fd);
       exit(EXIT_FAILURE);
     }
 
+    #if MILESTONE == 5
+    // Wait for approval from the parent before continuing to the next node
+    if (wait_for_parent_ack(ack_read_fd) == -1) {
+      close(ack_read_fd);
+      close(write_fd);
+      exit(EXIT_FAILURE);
+    }
+    #endif
     if (!at_destination) {
       int weight = graph->matrix[current][next];
       usleep((useconds_t)weight * 300000);
@@ -178,6 +224,11 @@ void run_child_process(Graph *graph, int src, int dest, int write_fd,
                          .next_node = -1,
                          .status = IPC_FINISHED};
   int send_result = ipc_send_message(write_fd, &finished);
+
+  #if MILESTONE == 5
+  close(ack_read_fd);
+  #endif
+
   close(write_fd);
   exit(send_result == 0 ? EXIT_SUCCESS : EXIT_FAILURE);
 }
