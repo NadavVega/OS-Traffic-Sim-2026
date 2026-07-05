@@ -169,6 +169,19 @@ void run_child_process(Graph *graph, int src, int dest, int write_fd,
     if (!at_destination) {
       int weight = graph->matrix[current][next];
       usleep((useconds_t)weight * 300000);
+
+      // הדפסה שהבן מסיים נסיעה וממתין לאישור
+      printf("  [CHILD PID=%d] Finished road %d->%d. Waiting for ACK...\n", pid, current, next);
+      fflush(stdout);
+
+      IpcMessage ack_msg;
+      if (read(grant_read_fd, &ack_msg, sizeof(ack_msg)) <= 0) {
+        close(write_fd);
+        exit(EXIT_FAILURE);
+      }
+      // הדפסה שהאישור התקבל
+      printf("  [CHILD PID=%d] ACK received! Continuing.\n", pid);
+      fflush(stdout);
     }
   }
 

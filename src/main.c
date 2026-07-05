@@ -140,23 +140,34 @@ static void handle_ipc_message(const IpcMessage *message, Traveler travelers[],
 
   Entity *entity = &entities[traveler_index];
   switch (message->status) {
-  case IPC_EN_ROUTE:
-    if (message->current_node < 0 || message->current_node >= num_nodes ||
-        message->next_node < 0 || message->next_node >= num_nodes) {
-      return;
-    }
-    entity->currentNode = message->current_node;
-    entity->nextNode = message->next_node;
-    entity->visualState = ENTITY_VISUAL_MOVING;
-    entity->timer = 0.0f;
-    int weight = graph[message->current_node][message->next_node];
-    entity->movementDuration = weight > 0 ? weight * 0.3f : 0.5f;
-    if (update_display) {
-      entity->currentPos = nodes[message->current_node].pos;
-    }
-    printf("[PID=%d] arrived at node %d | next node: %d\n", message->pid,
-           message->current_node, message->next_node);
-    break;
+    case IPC_EN_ROUTE:
+      if (message->current_node < 0 || message->current_node >= num_nodes ||
+          message->next_node < 0 || message->next_node >= num_nodes) {
+        return;
+          }
+      entity->currentNode = message->current_node;
+      entity->nextNode = message->next_node;
+      entity->visualState = ENTITY_VISUAL_MOVING;
+      entity->timer = 0.0f;
+      int weight = graph[message->current_node][message->next_node];
+      entity->movementDuration = weight > 0 ? weight * 0.3f : 0.5f;
+      if (update_display) {
+        entity->currentPos = nodes[message->current_node].pos;
+      }
+      printf("[PID=%d] arrived at node %d | next node: %d\n", message->pid,
+             message->current_node, message->next_node);
+
+#if MILESTONE >= 7
+      // --- הוספה למשימת המבחן: שליחת אישור (ACK) מהאב לבן ---
+      IpcMessage ack_msg = {.status = IPC_GRANTED_NODE}; // התוכן לא משנה לפי ההוראות
+      if (ipc_send_message(grant_write_fds[traveler_index], &ack_msg) == -1) {
+        perror("Error: Failed to send ACK to child");
+      }else {
+        // הוספנו הדפסה כדי לראות שהאישור נשלח
+        printf("  [PARENT ACK] Sent movement ACK to PID %d\n", message->pid);
+      }
+#endif
+      break;
   case IPC_ARRIVED_DEST:
     if (message->current_node < 0 || message->current_node >= num_nodes) {
       return;
